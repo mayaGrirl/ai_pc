@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="150" height="200" viewBox="0 0 150 200">
+  <rect fill="#00a651" width="150" height="200" rx="15"/>
+  <rect fill="#1a1a1a" x="10" y="25" width="130" height="150" rx="5"/>
+  <text x="75" y="190" font-family="Arial" font-size="12" fill="white" text-anchor="middle">OPPO</text>
+</svg>

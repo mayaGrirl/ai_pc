@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ff8533;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ff6600;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect fill="url(#grad)" width="1200" height="400"/>
+  <text x="600" y="180" font-family="Arial" font-size="48" font-weight="bold" fill="white" text-anchor="middle">欢迎来到鼎丰28</text>
+  <text x="600" y="240" font-family="Arial" font-size="24" fill="white" text-anchor="middle" opacity="0.9">最佳游戏娱乐平台</text>
+</svg>

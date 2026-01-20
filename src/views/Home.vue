@@ -340,7 +340,7 @@ const scrollToTop = () => {
         <div class="index_box news_box">
           <div class="top">
             <h2>公告</h2>
-            <router-link class="more" to="/news">更多<img src="/index_more.png"></router-link>
+            <router-link class="more" to="#">更多<img src="/index_more.png"></router-link>
           </div>
           <ul class="news_list">
             <li v-for="notice in announcements.slice(0, 5)" :key="notice.id">
@@ -407,8 +407,8 @@ const scrollToTop = () => {
           <ul class="day_list">
             <li class="top">
               <dd style="width: 55px;">排名</dd>
-              <dd style="width: 90px;">昵称</dd>
-              <dd style="width: 155px;">乐豆</dd>
+              <dd style="width: 95px;">昵称</dd>
+              <dd style="width: 150px;">乐豆</dd>
             </li>
             <li v-for="item in (activeRankingTab === 'today' ? todayRankings : yesterdayRankings)" :key="item.rank">
               <dd style="width: 55px;">
@@ -416,8 +416,8 @@ const scrollToTop = () => {
                   {{ item.rank > 3 ? item.rank : '' }}
                 </span>
               </dd>
-              <dd style="width: 80px; margin-right: 10px;"><a href="#">{{ item.user }}</a></dd>
-              <dd style="width: 155px; color: #f03736; font-weight: bold;">{{ formatNumber(item.amount) }}</dd>
+              <dd style="width: 95px;"><a href="#">{{ item.user }}</a></dd>
+              <dd style="width: 150px; color: #f03736; font-weight: bold;">{{ formatNumber(item.amount) }}</dd>
             </li>
           </ul>
         </div>
@@ -944,12 +944,14 @@ const scrollToTop = () => {
   color: #9a9a9a;
   cursor: pointer;
   margin-right: 10px;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
 }
 
 .index_center .center_box .index_box .top a.more img {
-  vertical-align: middle;
   margin-left: 5px;
-  margin-top: -2px;
+  flex-shrink: 0;
 }
 
 /* Games Box */
@@ -1071,7 +1073,25 @@ const scrollToTop = () => {
 
 .index_center .center_box .news_box .top,
 .index_center .center_box .cash_box .top {
-  width: 302px;
+  width: 310px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 5px;
+  box-sizing: border-box;
+}
+
+.index_center .center_box .news_box .top h2,
+.index_center .center_box .cash_box .top h2 {
+  float: none;
+  margin: 0;
+}
+
+.index_center .center_box .news_box .top a.more,
+.index_center .center_box .cash_box .top a.more {
+  float: none;
+  margin-right: 0;
+  white-space: nowrap;
 }
 
 .index_center .center_box .news_box .news_list {
@@ -1226,18 +1246,19 @@ const scrollToTop = () => {
   color: #333;
   height: 34px;
   line-height: 34px;
-  padding: 0 10px;
+  padding: 0;
   width: 300px;
 }
 
 .index_center .center_box .day_box ul.day_list li dd {
-  margin: 0 auto;
-  display: inline-block;
+  margin: 0;
+  display: block;
   text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   float: left;
+  box-sizing: border-box;
 }
 
 .index_center .center_box .day_box ul.day_list li dd span.end {

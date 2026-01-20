@@ -1,0 +1,1 @@
+import{h as t}from"./MainLayout-C6zwKqtA.js";const s=e=>t.post("/api/app/v1/index",e),n=e=>t.post("/api/app/v1/index/detail",{id:e}),p=e=>t.post("/api/app/v1/game/newHot",e),o=e=>t.post("/api/app/v1/system/message",e),r=()=>s({type:1}),i=()=>s({type:2});export{i as a,n as b,r as g,p as i,o as s};

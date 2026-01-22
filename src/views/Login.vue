@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { login } from '@/api/auth'
+import { httpConfigRKey } from '@/api/common'
+import SodiumEncryptor from '@/utils/sodium'
 import MainLayout from '@/components/layout/MainLayout.vue'
 
 const { t } = useI18n()
@@ -13,11 +15,24 @@ const authStore = useAuthStore()
 
 const loading = ref(false)
 const errorMsg = ref('')
+const publicKey = ref('')
 
 const form = reactive({
   mobile: '',
   password: '',
   rememberMe: false
+})
+
+// 获取公钥
+onMounted(() => {
+  httpConfigRKey().then(({ data, code }) => {
+    if (code === 200 && data) {
+      publicKey.value = data.key
+      console.log('Public key loaded:', data.key)
+    }
+  }).catch(error => {
+    console.error('Failed to get public key:', error)
+  })
 })
 
 const handleLogin = async () => {
@@ -36,12 +51,22 @@ const handleLogin = async () => {
     return
   }
 
+  // 检查公钥是否已获取
+  if (!publicKey.value) {
+    errorMsg.value = '系统初始化中，请稍后重试'
+    return
+  }
+
   loading.value = true
 
   try {
+    // 加密密码
+    const encryptedPassword = await SodiumEncryptor.encrypt(form.password, publicKey.value)
+    console.log('Encrypted password:', encryptedPassword)
+
     const res = await login({
       mobile: form.mobile,
-      password: form.password,
+      password: encryptedPassword,
       type: 1
     })
 

@@ -15,7 +15,7 @@ export default defineConfig({
             '/api': {
                 target: 'https://api.kaixin28.com',
                 changeOrigin: true,
-                secure: true
+                secure: false
             }
         }
     },

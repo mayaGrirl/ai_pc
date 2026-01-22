@@ -1,25 +1,44 @@
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { registration, sendSmsToMobile } from '@/api/auth'
+import { httpConfigRKey } from '@/api/common'
+import SodiumEncryptor from '@/utils/sodium'
 import MainLayout from '@/components/layout/MainLayout.vue'
 
 const { t } = useI18n()
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 
 const loading = ref(false)
 const sendingCode = ref(false)
 const countdown = ref(0)
 const errorMsg = ref('')
+const publicKey = ref('')
+
+// 推荐人key (从URL读取)
+const recommend = computed(() => (route.query.t as string) || '')
 
 const form = reactive({
   mobile: '',
   verify_code: '',
   password: '',
   confirm_password: ''
+})
+
+// 获取公钥
+onMounted(async () => {
+  try {
+    const res = await httpConfigRKey()
+    if (res.code === 200 && res.data) {
+      publicKey.value = res.data.key
+    }
+  } catch (error) {
+    console.error('Failed to get public key:', error)
+  }
 })
 
 // 密码强度计算
@@ -90,11 +109,20 @@ const handleRegister = async () => {
   loading.value = true
 
   try {
+    // 加密密码
+    let encryptedPassword = form.password
+    let encryptedConfirmPassword = form.confirm_password
+    if (publicKey.value) {
+      encryptedPassword = await SodiumEncryptor.encrypt(form.password, publicKey.value)
+      encryptedConfirmPassword = await SodiumEncryptor.encrypt(form.confirm_password, publicKey.value)
+    }
+
     const res = await registration({
       mobile: form.mobile,
       verify_code: form.verify_code,
-      password: form.password,
-      confirm_password: form.confirm_password
+      password: encryptedPassword,
+      confirm_password: encryptedConfirmPassword,
+      recommend: recommend.value || undefined
     })
 
     if (res.code === 200 && res.data) {

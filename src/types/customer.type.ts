@@ -95,3 +95,19 @@ export interface CustomerProfile {
   member_field: MemberField;
   member_capital: MemberCapital;
 }
+
+// Block数据
+export interface BlockField {
+  id?: number;
+  identifier?: string | null;
+  language?: string | null;
+  title?: string | null;
+  content_type?: number;
+  content?: string | null;
+  status?: number;
+  disable_action?: string | null;
+  operator_user_id?: number;
+  operator_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}

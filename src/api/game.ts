@@ -11,7 +11,17 @@ import {
   LotteryDataDto,
   BetDataDto,
   LotteryListRes,
-  BetRecordRes
+  BetRecordRes,
+  ModeListDto,
+  ModeListRes,
+  SetModeDto,
+  SetModeRes,
+  AutoOneDto,
+  AutoOneRes,
+  SetAutoDto,
+  SetAutoRes,
+  ProfitLossDto,
+  ProfitLossRes
 } from '@/types/game.type'
 
 export const gameAll = (): Promise<HttpRes<GameClassRes>> => {
@@ -44,4 +54,29 @@ export const betRecords = (data: BetDataDto): Promise<HttpRes<BetRecordRes>> => 
 // 获取开奖记录
 export const lotteryRecord = (data: LotteryDataDto): Promise<HttpRes<LotteryListRes>> => {
   return http.post<HttpRes<LotteryListRes>, LotteryDataDto>('/api/app/v1/game/lotteryList', data)
+}
+
+// 获取模式列表
+export const modeList = (data: ModeListDto): Promise<HttpRes<ModeListRes>> => {
+  return http.post<HttpRes<ModeListRes>, ModeListDto>('/api/app/v1/game/modeList', data)
+}
+
+// 配置模型，增加（不传mode_id或者传0），编辑（必传mode_id >0）,删除其实就是编辑：就是status =0删除，1为正常
+export const setMode = (data: SetModeDto): Promise<HttpRes<SetModeRes>> => {
+  return http.post<HttpRes<SetModeRes>, SetModeDto>('/api/app/v1/game/mode', data)
+}
+
+// 获取自动配置，有且只有一个，如果有直接回显到表单
+export const autoOne = (data: AutoOneDto): Promise<HttpRes<AutoOneRes>> => {
+  return http.post<HttpRes<AutoOneRes>, AutoOneDto>('/api/app/v1/game/auto', data)
+}
+
+// 配置自动投注，有则更改，无则增加
+export const setAuto = (data: SetAutoDto): Promise<HttpRes<SetAutoRes>> => {
+  return http.post<HttpRes<SetAutoRes>, SetAutoDto>('/api/app/v1/game/autoSet', data)
+}
+
+// 获取盈亏统计
+export const profitLoss = (data: ProfitLossDto): Promise<HttpRes<ProfitLossRes>> => {
+  return http.post<HttpRes<ProfitLossRes>, ProfitLossDto>('/api/app/v1/game/profitLoss', data)
 }

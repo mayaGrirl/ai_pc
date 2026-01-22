@@ -12,7 +12,34 @@ const customer = computed(() => authStore.currentCustomer)
 
 // Game count digits - start from 0, animate to target
 const gameCountDigits = ref(['0', '0', '0', '0', '0', '0'])
-const targetNumber = 324816
+
+// Calculate target number based on date (increases daily, never decreases)
+const calculateDailyGameCount = (): number => {
+  const baseNumber = 300000 // Starting base
+  const referenceDate = new Date('2024-01-01')
+  const today = new Date()
+  today.setHours(0, 0, 0, 0) // Reset to start of day
+
+  // Calculate days since reference date
+  const daysSinceStart = Math.floor((today.getTime() - referenceDate.getTime()) / (1000 * 60 * 60 * 24))
+
+  // Seeded random function based on date string for consistent daily variation
+  const dateStr = today.toISOString().split('T')[0]
+  let seed = 0
+  for (let i = 0; i < dateStr.length; i++) {
+    seed = ((seed << 5) - seed) + dateStr.charCodeAt(i)
+    seed = seed & seed
+  }
+  const seededRandom = Math.abs(seed % 1000) // 0-999 variation
+
+  // Daily increment: base growth + seeded random variation
+  const dailyBaseGrowth = 500 // Average daily growth
+  const totalGrowth = (daysSinceStart * dailyBaseGrowth) + seededRandom
+
+  return baseNumber + totalGrowth
+}
+
+const targetNumber = calculateDailyGameCount()
 
 // 领救济弹窗
 const showWelfareModal = ref(false)
@@ -142,8 +169,6 @@ onMounted(() => {
             <li class="phone">
               <a href="javascript:void(0)"><img src="/phone.png" class="phone-icon"> 手机版</a>
             </li>
-            <li>|</li>
-            <li><a href="/network">网络检测</a></li>
             <li>|</li>
             <li><a href="javascript:void(0)" @click="openWelfareModal">领救济</a></li>
           </ul>

@@ -208,6 +208,9 @@ export interface LotteryResultItem {
   win_person_num?: number;
   user_bet_gold?: number;
   user_bet_win_gold?: number;
+  all_hand_person_num?: number;
+  win_auto_person_num?: number;
+  win_auto_robot_num?: number;
   game_type_name?: string;
   deleted_at?: string | null;
   created_at?: string;
@@ -293,4 +296,161 @@ export interface BetNoItem {
   multiple?: number;
   win_gold?: number;
   unique_played_method?: string;
+}
+
+// ====================== 模式相关类型 ======================
+
+// 获取模式列表请求参数
+export interface ModeListDto {
+  lottery_id: number;
+  game_group_id: number;
+  page: number;
+  pageSize: number;
+  mode_id?: number;  // 编辑时传递，获取指定模式详情
+}
+
+// 设置模式请求参数
+export interface SetModeDto {
+  id?: number;                // 模式ID（用于删除操作）
+  lottery_id?: number | string;
+  game_group_id?: number | string;
+  lottery_played_id?: string;  // 玩法ID（逗号分隔）
+  bet_no?: string;             // 投注号码（逗号分隔）
+  bet_gold?: string;           // 投注金额（逗号分隔）
+  total_gold?: number;         // 总金额
+  mode_name?: string;          // 模式名称
+  mode_id?: number;           // 模式ID（0或不传=新增，>0=编辑）
+  status?: number;            // 状态（0=删除，1=正常）
+}
+
+// 模式项
+export interface ModeItem {
+  id: number;
+  mode_name: string;
+  lottery_id: number;
+  game_group_id: number;
+  lottery_played_id: string;
+  bet_no: string;
+  bet_no_gold: string;
+  bet_gold: string;
+  total_gold: number;
+  status: number;
+  created_at?: string;
+  updated_at?: string;
+  game_group_name?: string;
+}
+
+// 模式列表响应
+export interface ModeListRes {
+  list: ModeItem[];
+  total?: number;
+  page?: number;
+  pageSize?: number;
+}
+
+// 设置模式响应
+export interface SetModeRes {
+  success?: boolean;
+  message?: string;
+  mode_id?: number;
+}
+
+// ====================== 自动投注相关类型 ======================
+
+// 获取自动配置请求参数
+export interface AutoOneDto {
+  lottery_id: number;
+}
+
+// 自动配置项
+export interface AutoItem {
+  id?: number;
+  member_id?: number;
+  auto_id?: number;           // 关联的自动配置ID
+  game_type_id?: number;      // 游戏类型ID (lottery_id)
+  game_group_id?: number;     // 玩法分组ID
+  mode_id?: number;           // 模式ID
+  total_expect_nums?: number; // 要执行的期数
+  min_gold?: number;          // 金币下限
+  max_gold?: number;          // 金币上限
+  min_bet_num?: string;       // 最小期号
+  max_bet_num?: string;       // 最大期号
+  user_type?: number;
+  status?: number;            // 0关闭，1启动
+  mode_name?: string;         // 模式名称
+  deleted_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// 获取自动配置响应 - 数据直接返回，不包装在auto字段中
+export type AutoOneRes = AutoItem | null;
+
+// 设置自动配置请求参数
+export interface SetAutoDto {
+  lottery_id: number | string;
+  game_group_id: number | string;  // 玩法分组ID
+  mode_id: number | string;
+  total_expect_nums: number;  // 要执行的期数（1-1440）
+  min_gold: number;           // 金币下限
+  max_gold: number;           // 金币上限
+  status: number;             // 0关闭，1启动
+}
+
+// 设置自动配置响应
+export interface SetAutoRes {
+  success?: boolean;
+  message?: string;
+}
+
+// ====================== 盈亏统计相关类型 ======================
+
+// 获取盈亏统计请求参数
+export interface ProfitLossDto {
+  page: number;
+  pageSize: number;
+  lottery_id?: number;
+  game_group_id?: number;
+}
+
+// 盈亏统计项
+export interface ProfitLossItem {
+  id?: number;
+  member_id?: number;
+  game_type_id?: number;
+  game_group_id?: number;
+  stat_date?: string;
+  bet_count?: number;        // 投注次数
+  bet_gold?: number;         // 投注金额
+  win_gold?: number;         // 中奖金额
+  profit?: number;           // 盈亏
+  auto_bet_gold?: number;    // 自动投注金额
+  hand_bet_gold?: number;    // 手动投注金额
+  tax_gold?: number;         // 税金
+  is_robot?: number;
+  game_type_name?: string;   // 游戏名称
+  game_group_name?: string;  // 分组名称
+  created_at?: string;
+  updated_at?: string;
+}
+
+// 盈亏汇总
+export interface ProfitLossSummary {
+  member_count?: number;
+  bet_count?: number;
+  bet_gold?: number;
+  win_gold?: number;
+  profit?: number;
+  auto_bet_gold?: number;
+  hand_bet_gold?: number;
+  tax_gold?: number;
+}
+
+// 盈亏统计响应
+export interface ProfitLossRes {
+  list: ProfitLossItem[];
+  total?: number;
+  page?: number;
+  pageSize?: number;
+  summary?: ProfitLossSummary;
 }

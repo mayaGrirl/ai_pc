@@ -5,6 +5,8 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import MainLayout from '@/components/layout/MainLayout.vue'
 import { getBanners, getAnnouncements, indexGameHotNew } from '@/api/home'
+import { httpConfigRKey } from '@/api/common'
+import SodiumEncryptor from '@/utils/sodium'
 import type { IndexDataItem, gameItem } from '@/types/index.type'
 
 const { t, locale } = useI18n()
@@ -31,6 +33,7 @@ const loginForm = ref({
 })
 const loginLoading = ref(false)
 const loginError = ref('')
+const publicKey = ref('')
 
 // Withdrawal dynamics mock data
 const withdrawRecords = ref([
@@ -148,12 +151,21 @@ const handleLogin = async () => {
     return
   }
 
+  // 检查公钥是否已获取
+  if (!publicKey.value) {
+    loginError.value = '系统初始化中，请稍后重试'
+    return
+  }
+
   loginLoading.value = true
   try {
+    // 加密密码
+    const encryptedPassword = await SodiumEncryptor.encrypt(loginForm.value.password, publicKey.value)
+
     const { login } = await import('@/api/auth')
     const res = await login({
       mobile: loginForm.value.mobile,
-      password: loginForm.value.password,
+      password: encryptedPassword,
       type: 1
     })
 
@@ -176,6 +188,15 @@ const handleLogin = async () => {
 
 // Load data
 onMounted(async () => {
+  // 获取公钥
+  httpConfigRKey().then(({ data, code }) => {
+    if (code === 200 && data) {
+      publicKey.value = data.key
+    }
+  }).catch(error => {
+    console.error('Failed to get public key:', error)
+  })
+
   try {
     const [bannerRes, announcementRes, hotRes] = await Promise.all([
       getBanners(),
@@ -250,26 +271,26 @@ const scrollToTop = () => {
         <template v-if="!isLogin">
           <div><b>用户登入</b></div>
           <form class="sign_box" @submit.prevent="handleLogin">
-            <dd style="margin-top: 15px">
+            <div style="margin-top: 15px">
               <div v-if="loginError" class="error-msg">{{ loginError }}</div>
               <div class="frame">
                 <b class="zh"></b>
                 <input v-model="loginForm.mobile" type="text" placeholder="请输入手机号码" tabindex="1">
               </div>
-            </dd>
-            <dd>
+            </div>
+            <div>
               <div class="frame">
                 <b class="mm"></b>
                 <input v-model="loginForm.password" type="password" placeholder="请输入密码" tabindex="2">
               </div>
-            </dd>
-            <dd>
+            </div>
+            <div>
               <input type="submit" class="sign" :value="loginLoading ? '登录中...' : '登录'" :disabled="loginLoading">
-            </dd>
+            </div>
           </form>
-          <dd style="margin:10px auto;text-align: center">
+          <div style="margin:10px auto;text-align: center">
             <p><router-link to="/forgot-password">忘记密码</router-link> | <router-link to="/register">立即注册</router-link></p>
-          </dd>
+          </div>
         </template>
 
         <!-- Logged in: Show user info -->
@@ -290,8 +311,8 @@ const scrollToTop = () => {
           </div>
           <div class="user-onwer-list">
             <router-link to="/user/detail"><p>余额：<span>{{ formatNumber(customer?.points || 0) }}</span></p></router-link>
-            <router-link class="button" to="/store">商城</router-link>
-            <router-link class="button" to="/user/bank">充值</router-link>
+            <router-link class="button" to="/shop">商城</router-link>
+            <router-link class="button" to="/partners">充值</router-link>
           </div>
           <div class="anniu_box">
             <router-link class="button" to="/user/checkin" style="cursor: pointer">每日签到</router-link>
@@ -406,18 +427,18 @@ const scrollToTop = () => {
           </ul>
           <ul class="day_list">
             <li class="top">
-              <dd style="width: 55px;">排名</dd>
-              <dd style="width: 95px;">昵称</dd>
-              <dd style="width: 150px;">乐豆</dd>
+              <span style="width: 55px; display: inline-block;">排名</span>
+              <span style="width: 95px; display: inline-block;">昵称</span>
+              <span style="width: 150px; display: inline-block;">乐豆</span>
             </li>
             <li v-for="item in (activeRankingTab === 'today' ? todayRankings : yesterdayRankings)" :key="item.rank">
-              <dd style="width: 55px;">
+              <span style="width: 55px; display: inline-block;">
                 <span :class="item.rank === 1 ? 'one' : item.rank === 2 ? 'two' : item.rank === 3 ? 'three' : 'end'">
                   {{ item.rank > 3 ? item.rank : '' }}
                 </span>
-              </dd>
-              <dd style="width: 95px;"><a href="#">{{ item.user }}</a></dd>
-              <dd style="width: 150px; color: #f03736; font-weight: bold;">{{ formatNumber(item.amount) }}</dd>
+              </span>
+              <span style="width: 95px; display: inline-block;"><a href="#">{{ item.user }}</a></span>
+              <span style="width: 150px; display: inline-block; color: #f03736; font-weight: bold;">{{ formatNumber(item.amount) }}</span>
             </li>
           </ul>
         </div>
@@ -640,7 +661,7 @@ const scrollToTop = () => {
   overflow: hidden;
 }
 
-.bannerbox .fucen_box form.sign_box dd {
+.bannerbox .fucen_box form.sign_box > div {
   margin: 0 auto;
   width: 289px;
   height: auto;
@@ -648,7 +669,7 @@ const scrollToTop = () => {
   font-size: 13px;
 }
 
-.bannerbox .fucen_box form.sign_box dd div.frame {
+.bannerbox .fucen_box form.sign_box > div div.frame {
   width: 100%;
   height: auto;
   padding: 7px 0;
@@ -659,7 +680,7 @@ const scrollToTop = () => {
   box-sizing: border-box;
 }
 
-.bannerbox .fucen_box form.sign_box dd div.frame b {
+.bannerbox .fucen_box form.sign_box > div div.frame b {
   width: 16px;
   height: 20px;
   display: inline-block;
@@ -667,15 +688,15 @@ const scrollToTop = () => {
   float: left;
 }
 
-.bannerbox .fucen_box form.sign_box dd div.frame b.zh {
+.bannerbox .fucen_box form.sign_box > div div.frame b.zh {
   background: url("/index_ever.png") 0 0 no-repeat;
 }
 
-.bannerbox .fucen_box form.sign_box dd div.frame b.mm {
+.bannerbox .fucen_box form.sign_box > div div.frame b.mm {
   background: url("/index_ever.png") -25px 0 no-repeat;
 }
 
-.bannerbox .fucen_box form.sign_box dd div.frame input {
+.bannerbox .fucen_box form.sign_box > div div.frame input {
   float: left;
   border: 0px;
   width: calc(100% - 50px);
@@ -686,7 +707,7 @@ const scrollToTop = () => {
   font-size: 13px;
 }
 
-.bannerbox .fucen_box form.sign_box dd .sign {
+.bannerbox .fucen_box form.sign_box > div .sign {
   width: 100%;
   height: 45px;
   line-height: 45px;
@@ -702,11 +723,11 @@ const scrollToTop = () => {
   box-sizing: border-box;
 }
 
-.bannerbox .fucen_box form.sign_box dd .sign:hover {
+.bannerbox .fucen_box form.sign_box > div .sign:hover {
   background: #f03736;
 }
 
-.bannerbox .fucen_box form.sign_box dd .sign:disabled {
+.bannerbox .fucen_box form.sign_box > div .sign:disabled {
   background: #ccc;
   cursor: not-allowed;
 }

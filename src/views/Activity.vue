@@ -1,78 +1,62 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import MainLayout from '@/components/layout/MainLayout.vue'
+import { getActivitiesByStatus } from '@/api/home'
+import type { IndexDataItem } from '@/types/index.type'
 
 const activeTab = ref('ongoing') // ongoing, ended, preview
-
-// Activity data matching the screenshot
-const allActivities = ref([
-  {
-    id: 1,
-    title: '2.8外围亏损返利',
-    image: '/uploads/2022/12/activity1.jpg',
-    time: '2021-01-01至长期',
-    intro: '2.8外围群玩法亏损属于独立计算，不予其它任何系列游戏输赢累加。',
-    details: [
-      '单注下注大，小，单，双亏损返利5%',
-      '单注组合下注小双，大单，小单，大双亏损返利10%'
-    ],
-    status: 'ongoing'
-  },
-  {
-    id: 2,
-    title: '投注返利',
-    image: '/uploads/2022/12/activity2.jpg',
-    time: '2021-01-01至长期',
-    intro: '每日有效流水投注总额20,000以上可获得当日总投注总额的0.005%（封顶最高2000元）',
-    details: [
-      '1.投注额返利活动每周领取一次，当天的投注额返利24点以后结算；'
-    ],
-    status: 'ongoing'
-  },
-  {
-    id: 3,
-    title: '每日排行榜奖励',
-    image: '/uploads/2022/12/activity3.jpg',
-    time: '2021-01-01至长期',
-    intro: '每日1至50名上榜就有奖',
-    details: [
-      '每日游戏排行榜1-50名均可获奖，奖励在次日自动发放。'
-    ],
-    status: 'ongoing'
-  },
-  {
-    id: 4,
-    title: '首充返利',
-    image: '/uploads/2022/12/activity4.jpg',
-    time: '2021-01-01至长期',
-    intro: '首充返利天天有',
-    details: [
-      '有效流水达到当日首充的8倍，次日可获得首充金额的3%返利'
-    ],
-    status: 'ongoing'
-  },
-  {
-    id: 5,
-    title: '登录奖 - 亿万豆豆免费送',
-    image: '/uploads/2022/12/activity5.jpg',
-    time: '2021-01-01至长期',
-    intro: '登录奖 - 亿万豆豆免费送',
-    details: [],
-    status: 'ongoing'
-  }
-])
-
+const activities = ref<IndexDataItem[]>([])
+const loading = ref(false)
 const expandedItems = ref<Set<number>>(new Set())
 
-const filteredActivities = computed(() => {
-  if (activeTab.value === 'ongoing') {
-    return allActivities.value.filter(a => a.status === 'ongoing')
-  } else if (activeTab.value === 'ended') {
-    return allActivities.value.filter(a => a.status === 'ended')
-  } else {
-    return allActivities.value.filter(a => a.status === 'preview')
+// 根据tab获取对应的is_expired值
+const getExpiredValue = (tab: string): '-1' | '0' | '1' => {
+  switch (tab) {
+    case 'ongoing': return '0'   // 进行中
+    case 'ended': return '1'     // 已结束
+    case 'preview': return '-1'  // 活动预告
+    default: return '0'
   }
-})
+}
+
+// 获取活动数据
+const fetchActivities = async () => {
+  loading.value = true
+  try {
+    const is_expired = getExpiredValue(activeTab.value)
+    const res = await getActivitiesByStatus(is_expired)
+    if (res.code === 200 && res.data) {
+      activities.value = res.data
+    } else {
+      activities.value = []
+    }
+  } catch (error) {
+    console.error('获取活动列表失败:', error)
+    activities.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+// 格式化活动时间
+const formatTime = (item: IndexDataItem) => {
+  const start = item.start_at || ''
+  const end = item.end_at || '长期'
+  if (start && end) {
+    return `${start.split(' ')[0]}至${end === '长期' ? end : end.split(' ')[0]}`
+  }
+  return '长期有效'
+}
+
+// 获取状态文本
+const getStatusText = () => {
+  switch (activeTab.value) {
+    case 'ongoing': return '进行中'
+    case 'ended': return '已结束'
+    case 'preview': return '未开始'
+    default: return '进行中'
+  }
+}
 
 const toggleExpand = (id: number) => {
   if (expandedItems.value.has(id)) {
@@ -83,6 +67,16 @@ const toggleExpand = (id: number) => {
 }
 
 const isExpanded = (id: number) => expandedItems.value.has(id)
+
+// 监听tab变化
+watch(activeTab, () => {
+  fetchActivities()
+})
+
+// 初始化加载
+onMounted(() => {
+  fetchActivities()
+})
 </script>
 
 <template>
@@ -106,46 +100,51 @@ const isExpanded = (id: number) => expandedItems.value.has(id)
 
       <!-- Activity List -->
       <div class="activity-list">
-        <div
-          v-for="activity in filteredActivities"
-          :key="activity.id"
-          class="activity-item"
-        >
-          <!-- Left: Image -->
-          <div class="activity-image">
-            <img :src="activity.image" :alt="activity.title">
-          </div>
-
-          <!-- Middle: Content -->
-          <div class="activity-content">
-            <h3 class="activity-title">{{ activity.title }}</h3>
-            <p class="activity-time"><span class="label">活动时间：</span>{{ activity.time }}</p>
-            <p class="activity-intro"><span class="label">活动简介：</span>{{ activity.intro }}</p>
-            <template v-if="isExpanded(activity.id)">
-              <p v-for="(detail, idx) in activity.details" :key="idx" class="activity-detail">
-                {{ detail }}
-              </p>
-            </template>
-            <button
-              type="button"
-              class="expand-btn"
-              @click="toggleExpand(activity.id)"
-            >
-              <span v-if="!isExpanded(activity.id)">&#10095; 展开更多</span>
-              <span v-else>&#10094; 收起</span>
-            </button>
-          </div>
-
-          <!-- Right: Status Stamp -->
-          <div class="activity-stamp">
-            <div class="stamp ongoing">进行中</div>
-          </div>
+        <!-- Loading State -->
+        <div v-if="loading" class="loading-state">
+          <p>加载中...</p>
         </div>
 
-        <!-- Empty State -->
-        <div v-if="filteredActivities.length === 0" class="empty-state">
-          <p>暂无活动</p>
-        </div>
+        <template v-else>
+          <div
+            v-for="activity in activities"
+            :key="activity.id"
+            class="activity-item"
+          >
+            <!-- Left: Image -->
+            <div class="activity-image">
+              <img :src="activity.pc_pic || activity.pic" :alt="activity.title">
+            </div>
+
+            <!-- Middle: Content -->
+            <div class="activity-content">
+              <h3 class="activity-title">{{ activity.title }}</h3>
+              <p class="activity-time"><span class="label">活动时间：</span>{{ formatTime(activity) }}</p>
+              <p class="activity-intro"><span class="label">活动简介：</span>{{ activity.content?.replace(/<[^>]+>/g, '').substring(0, 100) }}...</p>
+              <template v-if="isExpanded(activity.id)">
+                <div class="activity-detail" v-html="activity.content"></div>
+              </template>
+              <button
+                type="button"
+                class="expand-btn"
+                @click="toggleExpand(activity.id)"
+              >
+                <span v-if="!isExpanded(activity.id)">&#10095; 展开更多</span>
+                <span v-else>&#10094; 收起</span>
+              </button>
+            </div>
+
+            <!-- Right: Status Stamp -->
+            <div class="activity-stamp">
+              <div :class="['stamp', activeTab]">{{ getStatusText() }}</div>
+            </div>
+          </div>
+
+          <!-- Empty State -->
+          <div v-if="activities.length === 0" class="empty-state">
+            <p>暂无活动</p>
+          </div>
+        </template>
       </div>
     </div>
   </MainLayout>
@@ -316,5 +315,30 @@ const isExpanded = (id: number) => expandedItems.value.has(id)
   padding: 60px 0;
   color: #999;
   font-size: 14px;
+}
+
+/* Loading State */
+.loading-state {
+  text-align: center;
+  padding: 60px 0;
+  color: #999;
+  font-size: 14px;
+}
+
+/* Activity Detail HTML Content */
+.activity-detail {
+  font-size: 14px;
+  color: #666;
+  line-height: 1.8;
+  margin: 10px 0;
+}
+
+.activity-detail :deep(img) {
+  max-width: 100%;
+  height: auto;
+}
+
+.activity-detail :deep(p) {
+  margin: 5px 0;
 }
 </style>

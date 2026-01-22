@@ -1,0 +1,1 @@
+import{h as e}from"./MainLayout-DWWz-nA_.js";const s=t=>e.post("/api/app/v1/index",t),n=t=>e.post("/api/app/v1/index/detail",{id:t}),p=t=>e.post("/api/app/v1/game/newHot",t),o=t=>e.post("/api/app/v1/system/message",t),i=()=>s({type:1}),r=()=>s({type:2}),c=t=>s({type:3,is_expired:t});export{r as a,c as b,n as c,i as g,p as i,o as s};

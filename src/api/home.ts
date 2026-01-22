@@ -41,6 +41,13 @@ export const getAnnouncements = () => getIndex({ type: 2 as IndexType })
 /** 获取活动列表 (type=3) */
 export const getActivities = () => getIndex({ type: 3 as IndexType })
 
+/**
+ * 获取活动列表 - 支持过期状态筛选
+ * @param is_expired -1: 活动预告(未开始), 0: 进行中(不过期), 1: 已结束(过期)
+ */
+export const getActivitiesByStatus = (is_expired: '-1' | '0' | '1') =>
+  getIndex({ type: 3 as IndexType, is_expired })
+
 /** 获取合作商家 (type=4) */
 export const getPartners = () => getIndex({ type: 4 as IndexType })
 

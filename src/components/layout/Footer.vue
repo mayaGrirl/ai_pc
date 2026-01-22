@@ -1,8 +1,19 @@
 <script setup lang="ts">
+import { computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { useConfigStore } from '@/stores/config'
 
 const route = useRoute()
+const configStore = useConfigStore()
 const isHomePage = () => route.path === '/'
+
+// System config from store
+const sysConfig = computed(() => configStore.sysConfig)
+
+onMounted(() => {
+  // 获取系统配置（通过store统一管理，避免重复请求）
+  configStore.fetchConfig()
+})
 </script>
 
 <template>
@@ -21,7 +32,7 @@ const isHomePage = () => route.path === '/'
         </p>
       </div>
       <div class="qq_box">
-        <h1>QQ:228711</h1>
+        <h1>QQ:{{ sysConfig?.connet_qq || '228711' }}</h1>
         <p>有问题请咨询在线客服</p>
         <p>周一至周五；9：30-12：00 14：00-18：00</p>
       </div>

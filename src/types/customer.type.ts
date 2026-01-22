@@ -96,6 +96,43 @@ export interface CustomerProfile {
   member_capital: MemberCapital;
 }
 
+// 个人中心VIP会员领取状态
+export interface VipReceiveState {
+  vip_receive_state: number;
+}
+
+// 存款变动记录
+export interface DepositRecordField {
+  id?: number;
+  member_id?: number;
+  mobile?: string | null;
+  type?: number;
+  type_label?: string | null;
+  deposit?: number;
+  b_deposit?: number;
+  a_deposit?: number;
+  remark?: string | null;
+  deleted_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+// 金豆变动记录
+export interface PointsRecordField {
+  id?: number;
+  member_id?: number;
+  mobile?: string | null;
+  type?: number;
+  type_label?: string | null;
+  points?: number;
+  b_points?: number;
+  a_points?: number;
+  remark?: string | null;
+  deleted_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
 // Block数据
 export interface BlockField {
   id?: number;
@@ -110,4 +147,211 @@ export interface BlockField {
   operator_at?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+}
+
+// 获取救济数据
+export interface ReliefResponse {
+  options: MemberLevel[];
+  receive_count: number;
+  limit: number;
+}
+
+// 会员等级配置
+export interface MemberLevel {
+  id?: number;
+  name?: string | null;
+  level?: number;
+  emin?: number;
+  emax?: number;
+  tg?: number;
+  day_jiuji_point?: number;
+  reward_discount?: string | null;
+}
+
+// 推广邀请链接
+export interface RecommendLinkKey {
+  key: string;
+}
+
+// 推广的会员
+export interface RecommendCustomer {
+  id?: number;
+  regtime?: number;
+  tgall?: number;
+  nickname?: string | null;
+  experience?: number;
+  tzpoints?: number;
+}
+
+// 一键领取推荐奖励
+export interface ReceiveRecommendRewardDto {
+  type: number;
+}
+
+// 推广记录
+export interface SpreadRecordField {
+  id?: number;
+  member_id?: number;
+  username?: string | null;
+  addtime?: number;
+  status?: number;
+  status_label?: string | null;
+}
+
+// 充值返利
+export interface WagesCzRecordField {
+  id?: number;
+  uid?: number;
+  wpoints?: number;
+  type?: number;
+  total?: number;
+  cz?: number;
+  lv?: string | null;
+  hdpoints?: number;
+  addtime?: number;
+  gettime?: number;
+  state?: number;
+  state_label?: string | null;
+}
+
+// 亏损返利奖励
+export interface WagesRecordField {
+  id?: number;
+  uid?: number;
+  points?: number;
+  wpoints?: number;
+  cz?: number;
+  lv?: string | null;
+  hdpoints?: number;
+  addtime?: number;
+  gettime?: number;
+  state?: number;
+  state_label?: string | null;
+}
+
+// 本周累计工资
+export interface SalaryWekdayTotal {
+  coin: number;
+}
+
+// 工资记录
+export interface SalaryRecordField {
+  id?: number;
+  uid?: number;
+  basecoin?: number;
+  coin?: number;
+  typestr?: string | null;
+  addtime?: number;
+  status?: number;
+  status_label?: string | null;
+}
+
+// 工资领取记录
+export interface SalaryZRecordField {
+  id?: number;
+  uid?: number;
+  ctdateA?: number;
+  ctdateB?: number;
+  coin?: number;
+  status?: number;
+  addtime?: number;
+  gettime?: number;
+  status_label?: string | null;
+}
+
+// 签到统计
+export interface SignInStatisticsField {
+  total_people: number;
+  total_points: number;
+  total_base_coin: number;
+  continue_days: number;
+  total_days: number;
+  is_sign: boolean;
+}
+
+// 签到记录
+export interface SignInRecord {
+  id: number;
+  member_id: number;
+  sign_date: string;
+  reward_points: number;
+  reward_base_coin: number;
+  created_at: string;
+}
+
+// 签到记录字段（别名）
+export type SignRecordField = SignInRecord;
+
+// 更新昵称
+export interface UpdateNicknameDto {
+  nickname: string;
+}
+
+// 绑定邮箱
+export interface BindEmailDto {
+  email: string;
+}
+
+// 修改密码
+export interface UpdatePasswordDto {
+  safe_ask: string;
+  answer: string;
+  password: string;
+  confirm_password: string;
+}
+
+// 设置登录地限制
+export interface SettingLoginAddressDto {
+  enabled: number;
+  address1?: string;
+  address2?: string;
+}
+
+// 设置登录短信验证
+export interface SettingLoginSmsDto {
+  login_verify_type: string;
+}
+
+// 设置兑换礼品验证方式
+export interface RedeemGiftVerifyTypeDto {
+  prize_verify_type: string;
+}
+
+// 设置查看卡密验证方式
+export interface ViewCardVerifyTypeDto {
+  select_card_verify_type: string;
+}
+
+// 设置密保问题
+export interface SetSecurityPassDto {
+  safe_ask: string;
+  answer: string;
+}
+
+// 验证密保返回的key
+export interface CheckSecurityPass {
+  key: string;
+  time: number;
+}
+
+// 更新资料
+export interface UpdateProfileDto {
+  qq?: string;
+  alipay?: string;
+  wchat?: string;
+  realname?: string;
+  address?: string;
+  signature?: string;
+}
+
+// 存款转入转出
+export interface CustomerTransferDto {
+  type: string;
+  amount: number;
+  pay_password?: string;
+}
+
+// 兑换红包
+export interface PackExchangeDto {
+  code: string;
 }

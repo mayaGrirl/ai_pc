@@ -1,45 +1,66 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import UserLayout from '@/components/layout/UserLayout.vue'
+import { getReliefData, receiveRelief } from '@/api/customer'
+import type { MemberLevel } from '@/types/customer.type'
 
-// 救济领取规则
-const welfareRules = [
-  { amount: 50, rule: '余额少于50，每日可领取10次', times: 10 },
-  { amount: 60, rule: '余额少于60，每日可领取10次', times: 10 },
-  { amount: 70, rule: '余额少于70，每日可领取10次', times: 10 },
-  { amount: 80, rule: '余额少于80，每日可领取10次', times: 10 },
-  { amount: 100, rule: '余额少于100，每日可领取10次', times: 10 },
-  { amount: 120, rule: '余额少于120，每日可领取10次', times: 10 },
-  { amount: 150, rule: '余额少于150，每日可领取10次', times: 10 },
-  { amount: 200, rule: '余额少于200，每日可领取10次', times: 10 },
-  { amount: 300, rule: '余额少于300，每日可领取10次', times: 10 },
-  { amount: 500, rule: '余额少于500，每日可领取10次', times: 10 },
-]
+// 救济等级列表
+const levelList = ref<MemberLevel[]>([])
+const loading = ref(true)
+const remainingReceiveCount = ref(0)
+const limit = ref(10)
+const isSubmitting = ref(false)
 
-const verifyCode = ref('')
-const countdown = ref(0)
-let timer: any = null
+// 加载救济数据
+const loadReliefData = async () => {
+  loading.value = true
+  try {
+    const res = await getReliefData()
+    if (res.code === 200 && res.data) {
+      levelList.value = res.data.options || []
+      limit.value = res.data.limit || 10
 
-const sendCode = () => {
-  if (countdown.value > 0) return
-  alert('验证码已发送')
-  countdown.value = 60
-  timer = setInterval(() => {
-    countdown.value--
-    if (countdown.value <= 0) {
-      clearInterval(timer)
+      let remaining = 0
+      if (res.data.limit > res.data.receive_count) {
+        remaining = res.data.limit - res.data.receive_count
+      }
+      remainingReceiveCount.value = remaining
     }
-  }, 1000)
+  } catch (error) {
+    console.error('加载救济数据失败', error)
+  } finally {
+    loading.value = false
+  }
 }
 
-const handleClaim = () => {
-  if (!verifyCode.value.trim()) {
-    alert('请输入验证码')
+// 领取救济
+const handleClaim = async () => {
+  if (remainingReceiveCount.value < 1) {
+    alert('今日领取次数已用完')
     return
   }
-  alert('领取成功！')
-  verifyCode.value = ''
+
+  if (isSubmitting.value) return
+  isSubmitting.value = true
+
+  try {
+    const res = await receiveRelief()
+    if (res.code === 200) {
+      alert(res.message || '领取成功')
+      remainingReceiveCount.value = remainingReceiveCount.value - 1
+    } else {
+      alert(res.message || '领取失败')
+    }
+  } catch (error) {
+    alert('领取失败')
+  } finally {
+    isSubmitting.value = false
+  }
 }
+
+onMounted(() => {
+  loadReliefData()
+})
 </script>
 
 <template>
@@ -54,30 +75,41 @@ const handleClaim = () => {
       <div class="welfare-modal">
         <div class="modal-header">
           <div class="header-icons">
-            <span v-for="rule in welfareRules" :key="rule.amount" class="amount-icon">
+            <span v-for="item in levelList" :key="item.level" class="amount-icon">
               <span class="icon-bag">🎁</span>
-              <span class="icon-amount">{{ rule.amount }}</span>
+              <span class="icon-amount">{{ item.day_jiuji_point }}</span>
             </span>
           </div>
         </div>
 
         <div class="modal-body">
-          <div class="rule-list">
-            <div v-for="rule in welfareRules" :key="rule.amount" class="rule-item">
-              <span class="rule-icon">🎁</span>
-              <span class="rule-amount">{{ rule.amount }}</span>
-              <span class="rule-text">{{ rule.rule }}</span>
+          <!-- 加载状态 -->
+          <div v-if="loading" class="loading-state">加载中...</div>
+
+          <!-- 规则列表 -->
+          <div v-else class="rule-list">
+            <div class="rule-header">
+              <span class="col-level">等级</span>
+              <span class="col-amount">救济金</span>
+              <span class="col-rule">领取条件</span>
+            </div>
+            <div v-for="item in levelList" :key="item.level" class="rule-item">
+              <span class="col-level">
+                <img :src="`/skin/pc/wm/images/level/${item.level}.png`" width="20" />
+              </span>
+              <span class="col-amount coin">{{ item.day_jiuji_point }}</span>
+              <span class="col-rule">金豆≤{{ item.day_jiuji_point }}时可领取，每日{{ limit }}次</span>
             </div>
           </div>
 
           <div class="verify-section">
-            <div class="verify-row">
-              <input type="text" v-model="verifyCode" class="verify-input" placeholder="验证码" />
-              <button class="btn-send" @click="sendCode" :disabled="countdown > 0">
-                {{ countdown > 0 ? countdown + 's' : '获取验证码' }}
-              </button>
-            </div>
-            <button class="btn-claim" @click="handleClaim">立即领取</button>
+            <button
+              class="btn-claim"
+              @click="handleClaim"
+              :disabled="isSubmitting || remainingReceiveCount < 1"
+            >
+              {{ isSubmitting ? '领取中...' : `立即领取（剩余${remainingReceiveCount}次）` }}
+            </button>
           </div>
         </div>
       </div>
@@ -149,17 +181,32 @@ const handleClaim = () => {
   padding: 20px;
 }
 
+.loading-state {
+  text-align: center;
+  padding: 40px;
+  color: #999;
+}
+
 .rule-list {
-  max-height: 300px;
+  max-height: 400px;
   overflow-y: auto;
   margin-bottom: 20px;
+}
+
+.rule-header {
+  display: flex;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 2px solid #ff6600;
+  font-weight: bold;
+  color: #333;
+  background: #fff8f0;
 }
 
 .rule-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 0;
+  padding: 12px 0;
   border-bottom: 1px solid #f5f5f5;
 }
 
@@ -167,18 +214,23 @@ const handleClaim = () => {
   border-bottom: none;
 }
 
-.rule-icon {
-  font-size: 18px;
+.col-level {
+  width: 80px;
+  text-align: center;
 }
 
-.rule-amount {
-  font-size: 14px;
-  font-weight: bold;
+.col-amount {
+  width: 100px;
+  text-align: center;
+}
+
+.col-amount.coin {
   color: #ff6600;
-  min-width: 40px;
+  font-weight: bold;
 }
 
-.rule-text {
+.col-rule {
+  flex: 1;
   font-size: 13px;
   color: #666;
 }

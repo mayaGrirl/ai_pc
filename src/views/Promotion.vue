@@ -1,15 +1,22 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import MainLayout from '@/components/layout/MainLayout.vue'
 import { useAuthStore } from '@/stores/auth'
+import { recommendLink, recommendCustomers, receiveRecommendReward } from '@/api/customer'
+import type { RecommendCustomer } from '@/types/customer.type'
 
 const authStore = useAuthStore()
 const customer = computed(() => authStore.currentCustomer)
+const isLogin = computed(() => authStore.isLogin)
+
+// 推广链接key
+const promotionKey = ref('')
+const loading = ref(false)
 
 // 推广链接文本
 const referralText = computed(() => {
-  const userId = customer.value?.id || '12345'
-  return `重磅推出工资系统，游戏就可以领取工资。另外每日幸运儿奖励千万豆豆作为奖励，幸运儿上线另外可以领取10%奖励！您还在等什么？赶快行动吧！您的推广地址：http://www.df28.co/reg.php?tj=${userId}`
+  const key = promotionKey.value || customer.value?.spread_code || ''
+  return `重磅推出工资系统，游戏就可以领取工资。另外每日幸运儿奖励千万豆豆作为奖励，幸运儿上线另外可以领取10%奖励！您还在等什么？赶快行动吧！您的推广地址：${window.location.origin}/register?tj=${key}`
 })
 
 // VIP等级奖励数据
@@ -28,10 +35,17 @@ const levelRewards = ref([
 ])
 
 // 我推荐的用户列表
-const referralList = ref<any[]>([])
+const referralList = ref<RecommendCustomer[]>([])
 
-const formatNumber = (num: number) => {
+const formatNumber = (num: number | undefined) => {
   return num?.toLocaleString() || '0'
+}
+
+// 格式化时间
+const formatTime = (timestamp: number | undefined) => {
+  if (!timestamp) return '-'
+  const date = new Date(timestamp * 1000)
+  return date.toLocaleDateString('zh-CN')
 }
 
 const copyUrl = () => {
@@ -43,12 +57,63 @@ const copyUrl = () => {
   }
 }
 
-const claimBetBonus = () => {
-  alert('领取投注提成功能开发中')
+// 加载推广链接
+const loadPromotionLink = async () => {
+  try {
+    const res = await recommendLink()
+    if (res.code === 200 && res.data) {
+      promotionKey.value = res.data.key
+    }
+  } catch (error) {
+    console.error('加载推广链接失败', error)
+  }
 }
 
-const claimUpgradeBonus = () => {
-  alert('领取升级奖励功能开发中')
+// 加载推广会员列表
+const loadRecommendCustomers = async () => {
+  loading.value = true
+  try {
+    const res = await recommendCustomers({
+      pagination: { page: 1, size: 50 }
+    })
+    if (res.code === 200 && res.data) {
+      referralList.value = res.data
+    }
+  } catch (error) {
+    console.error('加载推广会员失败', error)
+  } finally {
+    loading.value = false
+  }
+}
+
+// 一键领取投注提成
+const claimBetBonus = async () => {
+  try {
+    const res = await receiveRecommendReward({ type: 1 })
+    if (res.code === 200) {
+      alert(res.message || '领取成功')
+      loadRecommendCustomers()
+    } else {
+      alert(res.message || '领取失败')
+    }
+  } catch (error) {
+    alert('领取失败')
+  }
+}
+
+// 一键领取升级奖励
+const claimUpgradeBonus = async () => {
+  try {
+    const res = await receiveRecommendReward({ type: 2 })
+    if (res.code === 200) {
+      alert(res.message || '领取成功')
+      loadRecommendCustomers()
+    } else {
+      alert(res.message || '领取失败')
+    }
+  } catch (error) {
+    alert('领取失败')
+  }
 }
 
 // 生成近7天日期
@@ -65,6 +130,13 @@ const getRecentDates = () => {
 }
 
 const recentDates = getRecentDates()
+
+onMounted(() => {
+  if (isLogin.value) {
+    loadPromotionLink()
+    loadRecommendCustomers()
+  }
+})
 </script>
 
 <template>
@@ -150,8 +222,21 @@ const recentDates = getRecentDates()
                 </tr>
               </thead>
               <tbody>
-                <tr v-if="referralList.length === 0">
+                <tr v-if="loading">
+                  <td colspan="11" style="text-align:center;color:#999;padding:20px;">加载中...</td>
+                </tr>
+                <tr v-else-if="referralList.length === 0">
                   <td colspan="11" style="text-align:center;color:#999;padding:20px;">暂无推荐用户</td>
+                </tr>
+                <tr v-else v-for="item in referralList" :key="item.id">
+                  <td>{{ item.nickname || '***' }}</td>
+                  <td>{{ formatNumber(item.experience) }}</td>
+                  <td>{{ formatTime(item.regtime) }}</td>
+                  <td class="coin">{{ formatNumber(item.tgall) }}</td>
+                  <td>-</td>
+                  <td>-</td>
+                  <td>-</td>
+                  <td v-for="(date, index) in recentDates" :key="index">-</td>
                 </tr>
               </tbody>
             </table>
@@ -389,5 +474,10 @@ const recentDates = getRecentDates()
   content: '';
   display: table;
   clear: both;
+}
+
+.myfrendtable .coin {
+  color: #f03736;
+  font-weight: bold;
 }
 </style>

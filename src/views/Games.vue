@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import MainLayout from '@/components/layout/MainLayout.vue'
 import {
   gameAll,
@@ -14,6 +15,7 @@ import {
   autoOne,
   setAuto
 } from '@/api/game'
+import { rankToday, rankYesterday, rankWeek } from '@/api/rank'
 import type {
   GameTypeMapItem,
   Game,
@@ -27,6 +29,10 @@ import type {
   BetNoItem,
   AutoItem
 } from '@/types/game.type'
+import type { RankTodayField, RankWeekField } from '@/types/rank.type'
+import type { HttpRes } from '@/types/http.type'
+
+const route = useRoute()
 
 // Loading states
 const isLoadingGames = ref(true)
@@ -35,7 +41,13 @@ const isLoadingRecords = ref(false)
 const isLoadingBetRecords = ref(false)
 const isLoadingModes = ref(false)
 const isLoadingProfitLoss = ref(false)
+const isLoadingRank = ref(false)
 const isSubmitting = ref(false)
+
+// Ranking state - 三列同时显示
+const rankDataToday = ref<RankTodayField[]>([])
+const rankDataYesterday = ref<RankTodayField[]>([])
+const rankDataWeek = ref<RankWeekField[]>([])
 
 // Betting panel state
 const showBettingPanel = ref(false)
@@ -243,6 +255,493 @@ const closeBetDetailModal = () => {
   showBetDetailModal.value = false
   currentBetDetail.value = null
 }
+
+// Verify modal - 验证弹框
+const showVerifyModal = ref(false)
+const currentVerifyData = ref<{
+  no: string
+  actionNo: string      // 原始开奖号码，用于显示
+  actionNoSort: string  // 排序后的号码，用于计算
+  result: number | null
+  gameName: string
+  lotteryId: number     // 当前选中的游戏ID
+  groupId: number
+  groupName: string
+  groupInfo: string
+  rewardNum: number
+  startNum: number
+  gameType: number
+  finalResRecord: string
+} | null>(null)
+
+// 判断是否是特殊玩法分组（号码形态、龙虎豹、大小单双等）- 这些分组直接显示finalResRecord结果
+const isSpecialPlayGroup = (groupName: string) => {
+  const specialGroups = ['号码形态', '形态', '龙虎豹', '龙虎', '大小单双', '大小', '单双']
+  return specialGroups.some(name => groupName.includes(name))
+}
+
+// 从finalResRecord中提取结果（取第一个 | 后面的内容，如果没有 | 就显示整个值）
+const extractResultFromFinalRes = (finalResRecord: string) => {
+  if (!finalResRecord) return ''
+  const pipeIndex = finalResRecord.indexOf('|')
+  if (pipeIndex !== -1) {
+    return finalResRecord.substring(pipeIndex + 1).trim()
+  }
+  return finalResRecord.trim()
+}
+
+// 获取游戏规则 - 根据玩法分组ID和游戏ID获取计算规则
+// 规则映射来自admin模板：open_recode_28.html, open_recode_16.html, open_recode_11.html, open_recode_36.html
+// lotteryId: 当前选中的游戏ID，用于识别同一游戏下的所有玩法分组
+// gameName: 游戏名称，用于识别游戏类型
+const getGameRuleByGroupId = (groupId: number, groupInfo: string, rewardNum: number, gameType: number, gameName: string = '', lotteryId: number = 0) => {
+  // 根据reward_num确定计算方法
+  let calcMethod = 'lastDigit'
+  if (rewardNum === 16 || rewardNum === 11) {
+    calcMethod = 'mod6Plus1' // 余6加1
+  } else if (rewardNum === 10) {
+    calcMethod = 'lastDigitPlus1' // 取尾数加1
+  }
+
+  // 检查是否是美国游戏（qlq系列）- 美国游戏的所有玩法分组使用相同的区位规则
+  const isQlqGame = gameName.includes('美国') || gameName.toLowerCase().includes('qlq')
+  // 检查是否是蛋蛋游戏 - 蛋蛋游戏的所有玩法分组使用相同的区位规则
+  // 支持：蛋蛋、dandan、dd、pc等命名，以及通过lotteryId判断
+  const lowerName = gameName.toLowerCase()
+  const isDandanGame = gameName.includes('蛋蛋') ||
+                       lowerName.includes('dandan') ||
+                       lowerName.includes('dd28') ||
+                       lowerName.includes('pc28') ||
+                       lowerName === 'pc' ||
+                       lowerName.startsWith('dd') ||
+                       lotteryId === 12  // 蛋蛋28的lottery_id
+
+  // ========== 蛋蛋28特殊处理（优先于rewardNum判断）==========
+  // 蛋蛋28: game_group_id = 18(和值), 19(号码形态), 20(龙虎豹), 21(大小单双)
+  // 区位规则: 一区(第1,2,3,4,5,6位) 二区(第7,8,9,10,11,12位) 三区(第13,14,15,16,17,18位)
+  if ([18, 19, 20, 21].includes(groupId)) {
+    return {
+      type: '28', zoneCount: 3, calcMethod: 'lastDigit',
+      zone1: [0, 1, 2, 3, 4, 5], zone2: [6, 7, 8, 9, 10, 11], zone3: [12, 13, 14, 15, 16, 17],
+      zone1Desc: '第1,2,3,4,5,6位', zone2Desc: '第7,8,9,10,11,12位', zone3Desc: '第13,14,15,16,17,18位'
+    }
+  }
+
+  // ========== 28类游戏规则 (reward_num=28) ==========
+  if (rewardNum === 28) {
+    // 蛋蛋28通过游戏名称判断
+    if (isDandanGame) {
+      return {
+        type: '28', zoneCount: 3, calcMethod: 'lastDigit',
+        zone1: [0, 1, 2, 3, 4, 5], zone2: [6, 7, 8, 9, 10, 11], zone3: [12, 13, 14, 15, 16, 17],
+        zone1Desc: '第1,2,3,4,5,6位', zone2Desc: '第7,8,9,10,11,12位', zone3Desc: '第13,14,15,16,17,18位'
+      }
+    }
+    // 美国28（qlq28）: 所有玩法分组 - 一区(第1,6位) 二区(第2,4位) 三区(第3,5位)
+    if (isQlqGame) {
+      return {
+        type: '28', zoneCount: 3, calcMethod: 'lastDigit',
+        zone1: [0, 5], zone2: [1, 3], zone3: [2, 4],
+        zone1Desc: '第1,6位', zone2Desc: '第2,4位', zone3Desc: '第3,5位'
+      }
+    }
+    // pc28: id=12 - 一区(第1,2,3,4,5,6位) 二区(第7,8,9,10,11,12位) 三区(第13,14,15,16,17,18位)
+    if (groupId === 12) {
+      return {
+        type: '28', zoneCount: 3, calcMethod: 'lastDigit',
+        zone1: [0, 1, 2, 3, 4, 5], zone2: [6, 7, 8, 9, 10, 11], zone3: [12, 13, 14, 15, 16, 17],
+        zone1Desc: '第1,2,3,4,5,6位', zone2Desc: '第7,8,9,10,11,12位', zone3Desc: '第13,14,15,16,17,18位'
+      }
+    }
+    // qlq28: id=49,53 - 一区(第1,6位) 二区(第2,4位) 三区(第3,5位)
+    if ([49, 53].includes(groupId)) {
+      return {
+        type: '28', zoneCount: 3, calcMethod: 'lastDigit',
+        zone1: [0, 5], zone2: [1, 3], zone3: [2, 4],
+        zone1Desc: '第1,6位', zone2Desc: '第2,4位', zone3Desc: '第3,5位'
+      }
+    }
+    // ca28gd1: id=37 - 一区(第5,8,11,14,17位) 二区(第6,9,12,15,18位) 三区(第7,10,13,16,19位)
+    if (groupId === 37) {
+      return {
+        type: '28', zoneCount: 3, calcMethod: 'lastDigit',
+        zone1: [4, 7, 10, 13, 16], zone2: [5, 8, 11, 14, 17], zone3: [6, 9, 12, 15, 18],
+        zone1Desc: '第5,8,11,14,17位', zone2Desc: '第6,9,12,15,18位', zone3Desc: '第7,10,13,16,19位'
+      }
+    }
+    // ca28gd2: id=42 - 一区(第2,5,8,11,14位) 二区(第3,6,9,12,15位) 三区(第4,7,10,13,16位)
+    if (groupId === 42) {
+      return {
+        type: '28', zoneCount: 3, calcMethod: 'lastDigit',
+        zone1: [1, 4, 7, 10, 13], zone2: [2, 5, 8, 11, 14], zone3: [3, 6, 9, 12, 15],
+        zone1Desc: '第2,5,8,11,14位', zone2Desc: '第3,6,9,12,15位', zone3Desc: '第4,7,10,13,16位'
+      }
+    }
+    // 默认28类: bj28/ca28/hg28/bg28等 - 一区(第2,5,8,11,14,17位) 二区(第3,6,9,12,15,18位) 三区(第4,7,10,13,16,19位)
+    return {
+      type: '28', zoneCount: 3, calcMethod: 'lastDigit',
+      zone1: [1, 4, 7, 10, 13, 16], zone2: [2, 5, 8, 11, 14, 17], zone3: [3, 6, 9, 12, 15, 18],
+      zone1Desc: '第2,5,8,11,14,17位', zone2Desc: '第3,6,9,12,15,18位', zone3Desc: '第4,7,10,13,16,19位'
+    }
+  }
+
+  // ========== 16类游戏规则 (reward_num=16) ==========
+  if (rewardNum === 16) {
+    // 优先按游戏名称判断
+    // 美国16（qlq16）: 所有玩法分组 - 一区(第2,5位) 二区(第3,6位) 三区(第4,6位)
+    if (isQlqGame) {
+      return {
+        type: '16', zoneCount: 3, calcMethod: 'mod6Plus1',
+        zone1: [1, 4], zone2: [2, 5], zone3: [3, 5],
+        zone1Desc: '第2,5位', zone2Desc: '第3,6位', zone3Desc: '第4,6位'
+      }
+    }
+    // qlq16: id=50
+    if (groupId === 50) {
+      return {
+        type: '16', zoneCount: 3, calcMethod: 'mod6Plus1',
+        zone1: [1, 4], zone2: [2, 5], zone3: [3, 5],
+        zone1Desc: '第2,5位', zone2Desc: '第3,6位', zone3Desc: '第4,6位'
+      }
+    }
+    // id=9: 一区(第2,5,8,11,14,17位) 二区(第3,6,9,12,15,18位) 三区(第4,7,10,13,16,19位)
+    if (groupId === 9) {
+      return {
+        type: '16', zoneCount: 3, calcMethod: 'mod6Plus1',
+        zone1: [1, 4, 7, 10, 13, 16], zone2: [2, 5, 8, 11, 14, 17], zone3: [3, 6, 9, 12, 15, 18],
+        zone1Desc: '第2,5,8,11,14,17位', zone2Desc: '第3,6,9,12,15,18位', zone3Desc: '第4,7,10,13,16,19位'
+      }
+    }
+    // 默认16类: bj16/ca16/hg16/bg16 - 一区(第1,4,7,10,13,16位) 二区(第2,5,8,11,14,17位) 三区(第3,6,9,12,15,18位)
+    return {
+      type: '16', zoneCount: 3, calcMethod: 'mod6Plus1',
+      zone1: [0, 3, 6, 9, 12, 15], zone2: [1, 4, 7, 10, 13, 16], zone3: [2, 5, 8, 11, 14, 17],
+      zone1Desc: '第1,4,7,10,13,16位', zone2Desc: '第2,5,8,11,14,17位', zone3Desc: '第3,6,9,12,15,18位'
+    }
+  }
+
+  // ========== 11类游戏规则 (reward_num=11) ==========
+  if (rewardNum === 11) {
+    // 优先按游戏名称判断
+    // 美国11（qlq11）: 所有玩法分组 - 一区(第2,5位) 二区(第4,6位)
+    if (isQlqGame) {
+      return {
+        type: '11', zoneCount: 2, calcMethod: 'mod6Plus1',
+        zone1: [1, 4], zone2: [3, 5], zone3: [],
+        zone1Desc: '第2,5位', zone2Desc: '第4,6位', zone3Desc: ''
+      }
+    }
+    // qlq11: id=51
+    if (groupId === 51) {
+      return {
+        type: '11', zoneCount: 2, calcMethod: 'mod6Plus1',
+        zone1: [1, 4], zone2: [3, 5], zone3: [],
+        zone1Desc: '第2,5位', zone2Desc: '第4,6位', zone3Desc: ''
+      }
+    }
+    // 默认11类: bj11/hg11/bg11/ca11 - 一区(第1,4,7,10,13,16位) 二区(第3,6,9,12,15,18位)
+    return {
+      type: '11', zoneCount: 2, calcMethod: 'mod6Plus1',
+      zone1: [0, 3, 6, 9, 12, 15], zone2: [2, 5, 8, 11, 14, 17], zone3: [],
+      zone1Desc: '第1,4,7,10,13,16位', zone2Desc: '第3,6,9,12,15,18位', zone3Desc: ''
+    }
+  }
+
+  // ========== 36类游戏规则 (reward_num=36) ==========
+  if (rewardNum === 36) {
+    // bj36/ca36/hg36/bg36: id=10,19,24 - 一区(第2,5,8,11,14,17位) 二区(第3,6,9,12,15,18位) 三区(第4,7,10,13,16,19位)
+    if ([10, 19, 24].includes(groupId)) {
+      return {
+        type: '36', zoneCount: 3, calcMethod: 'lastDigit',
+        zone1: [1, 4, 7, 10, 13, 16], zone2: [2, 5, 8, 11, 14, 17], zone3: [3, 6, 9, 12, 15, 18],
+        zone1Desc: '第2,5,8,11,14,17位', zone2Desc: '第3,6,9,12,15,18位', zone3Desc: '第4,7,10,13,16,19位'
+      }
+    }
+    // 默认36类 - 一区(第1,2,3,4,5,6位) 二区(第7,8,9,10,11,12位) 三区(第13,14,15,16,17,18位)
+    return {
+      type: '36', zoneCount: 3, calcMethod: 'lastDigit',
+      zone1: [0, 1, 2, 3, 4, 5], zone2: [6, 7, 8, 9, 10, 11], zone3: [12, 13, 14, 15, 16, 17],
+      zone1Desc: '第1,2,3,4,5,6位', zone2Desc: '第7,8,9,10,11,12位', zone3Desc: '第13,14,15,16,17,18位'
+    }
+  }
+
+  // ========== 10类游戏规则 (reward_num=10) ==========
+  if (rewardNum === 10) {
+    return {
+      type: '10', zoneCount: 1, calcMethod: 'lastDigitPlus1',
+      zone1: [0, 1, 2, 3, 4, 5, 6], zone2: [], zone3: [],
+      zone1Desc: '第1-7位', zone2Desc: '', zone3Desc: ''
+    }
+  }
+
+  // ========== 默认使用28类规则 ==========
+  return {
+    type: '28', zoneCount: 3, calcMethod: 'lastDigit',
+    zone1: [1, 4, 7, 10, 13, 16], zone2: [2, 5, 8, 11, 14, 17], zone3: [3, 6, 9, 12, 15, 18],
+    zone1Desc: '第2,5,8,11,14,17位', zone2Desc: '第3,6,9,12,15,18位', zone3Desc: '第4,7,10,13,16,19位'
+  }
+}
+
+// 计算验证数据 - 根据action_no和游戏规则计算各区和值
+const calculateVerifyFromActionNo = (actionNo: string, groupId: number, groupInfo: string, rewardNum: number, gameType: number, gameName: string = '', lotteryId: number = 0) => {
+  if (!actionNo) return null
+
+  // 解析action_no，支持逗号分隔或其他分隔符
+  const nums = actionNo.split(/[,|]/).map(n => parseInt(n.trim(), 10)).filter(n => !isNaN(n))
+  if (nums.length < 6) return null
+
+  const rule = getGameRuleByGroupId(groupId, groupInfo, rewardNum, gameType, gameName, lotteryId)
+
+  // 计算各区和值
+  const zone1Sum = rule.zone1.reduce((sum, idx) => sum + (nums[idx] || 0), 0)
+  const zone2Sum = rule.zone2.length > 0 ? rule.zone2.reduce((sum, idx) => sum + (nums[idx] || 0), 0) : 0
+  const zone3Sum = rule.zone3.length > 0 ? rule.zone3.reduce((sum, idx) => sum + (nums[idx] || 0), 0) : 0
+
+  // 根据计算方法得出各区数字
+  let n1 = 0, n2 = 0, n3 = 0, total = 0
+
+  switch (rule.calcMethod) {
+    case 'lastDigit': // 取尾数
+      n1 = zone1Sum % 10
+      n2 = zone2Sum % 10
+      n3 = zone3Sum % 10
+      total = n1 + n2 + n3
+      break
+    case 'mod6Plus1': // 余6加1
+      n1 = (zone1Sum % 6) + 1
+      n2 = (zone2Sum % 6) + 1
+      n3 = rule.zoneCount === 3 ? (zone3Sum % 6) + 1 : 0
+      total = rule.zoneCount === 3 ? n1 + n2 + n3 : n1 + n2
+      break
+    case 'lastDigitPlus1': // 取尾数加1
+      const sumAll = zone1Sum
+      n1 = (sumAll % 10) + 1
+      total = n1
+      break
+  }
+
+  return {
+    zone1Sum,
+    zone2Sum,
+    zone3Sum,
+    zone1Desc: rule.zone1Desc,
+    zone2Desc: rule.zone2Desc,
+    zone3Desc: rule.zone3Desc,
+    n1,
+    n2,
+    n3,
+    total,
+    zoneCount: rule.zoneCount,
+    calcMethod: rule.calcMethod,
+    gameType: rule.type
+  }
+}
+
+// Open verify modal - 打开验证弹框
+const openVerifyModal = (item: any) => {
+  // 从 lotteryRecords 中找到对应的原始记录
+  const record = lotteryRecords.value.find(r => r.expect_no === item.no)
+
+  // 获取当前游戏名称
+  const currentGame = allGames.value.find(g => g.id === activeGame.value)
+
+  // 获取当前玩法分组
+  const group = playGroups.value.find(g => g.id === activeGroupId.value)
+
+  // 获取action_no（原开奖号码，用于显示）
+  let actionNo = ''
+  if (record?.action_no) {
+    actionNo = record.action_no
+  } else if (record?.action_no_num) {
+    if (Array.isArray(record.action_no_num)) {
+      actionNo = record.action_no_num.join(',')
+    } else if (typeof record.action_no_num === 'object') {
+      actionNo = Object.values(record.action_no_num).join(',')
+    } else {
+      actionNo = String(record.action_no_num)
+    }
+  }
+
+  // 获取action_no_sort（排序后的号码，用于计算）
+  let actionNoSort =   ''
+  if (record?.action_no_sort) {
+    actionNoSort = record.action_no_sort
+  } else {
+    // 如果没有action_no_sort，使用actionNo作为后备
+    actionNoSort = actionNo
+  }
+
+  currentVerifyData.value = {
+    no: item.no,
+    actionNo,
+    actionNoSort,
+    result: item.result,
+    gameName: currentGame?.name || '',
+    lotteryId: activeGame.value,
+    groupId: group?.id || 0,
+    groupName: group?.name || '',
+    groupInfo: group?.info || '',
+    rewardNum: group?.reward_num || 28,
+    startNum: group?.start_num || 0,
+    gameType: group?.game_type || 0,
+    finalResRecord: item.finalResRecord || ''
+  }
+  showVerifyModal.value = true
+}
+
+// Close verify modal - 关闭验证弹框
+const closeVerifyModal = () => {
+  showVerifyModal.value = false
+  currentVerifyData.value = null
+}
+
+// 验证计算结果 - 使用排序后的号码(actionNoSort)进行计算
+const verifyCalcData = computed(() => {
+  if (!currentVerifyData.value?.actionNoSort) return null
+  return calculateVerifyFromActionNo(
+    currentVerifyData.value.actionNoSort,
+    currentVerifyData.value.groupId,
+    currentVerifyData.value.groupInfo,
+    currentVerifyData.value.rewardNum,
+    currentVerifyData.value.gameType,
+    currentVerifyData.value.gameName,
+    currentVerifyData.value.lotteryId
+  )
+})
+
+// 根据属性获取CSS类名（用于列表显示的属性标签）
+const getAttrClass = (attr: string): string => {
+  if (attr === '大' || attr === '龙') return 'attr-big'
+  if (attr === '小' || attr === '虎') return 'attr-small'
+  if (attr === '单') return 'attr-odd'
+  if (attr === '双') return 'attr-even'
+  if (attr === '豹') return 'attr-leopard'
+  // 形态相关
+  if (attr === '顺' || attr === '半' || attr === '杂') return 'attr-shape'
+  return 'attr-default'
+}
+
+// 根据特殊分组结果获取CSS类名
+const getSpecialResultClass = (resultText: string): string => {
+  if (!resultText) return 'special-default'
+  // 号码形态
+  if (resultText.includes('顺子') || resultText === '顺') return 'special-shunzi'
+  if (resultText.includes('半顺') || resultText === '半顺') return 'special-banshun'
+  if (resultText.includes('杂六') || resultText === '杂六') return 'special-zaliu'
+  if (resultText.includes('对子') || resultText === '对子') return 'special-duizi'
+  if (resultText.includes('豹子') || resultText === '豹子') return 'special-baozi'
+  // 龙虎豹
+  if (resultText === '龙') return 'special-long'
+  if (resultText === '虎') return 'special-hu'
+  if (resultText === '豹') return 'special-bao'
+  // 大小单双
+  if (resultText.includes('大') && resultText.includes('单')) return 'special-dadan'
+  if (resultText.includes('大') && resultText.includes('双')) return 'special-dashuang'
+  if (resultText.includes('小') && resultText.includes('单')) return 'special-xiaodan'
+  if (resultText.includes('小') && resultText.includes('双')) return 'special-xiaoshuang'
+  if (resultText === '大') return 'special-da'
+  if (resultText === '小') return 'special-xiao'
+  if (resultText === '单') return 'special-dan'
+  if (resultText === '双') return 'special-shuang'
+  return 'special-default'
+}
+
+// 根据数字结果获取属性描述（大小单双、形态、龙虎豹等）
+const getResultAttributes = (total: number, n1: number, n2: number, n3: number, rewardNum: number) => {
+  const attrs: string[] = []
+
+  // 28类游戏属性 (0-27)
+  if (rewardNum === 28) {
+    // 大小: 0-13小, 14-27大
+    attrs.push(total >= 14 ? '大' : '小')
+    // 单双
+    attrs.push(total % 2 === 0 ? '双' : '单')
+    // 龙虎豹: 三个区数字相同为豹，n1>n3为龙，n1<n3为虎
+    if (n1 === n2 && n2 === n3) {
+      attrs.push('豹')
+    } else if (n1 > n3) {
+      attrs.push('龙')
+    } else if (n1 < n3) {
+      attrs.push('虎')
+    }
+    // 形态: 三个数字的形态
+    const sorted = [n1, n2, n3].sort((a, b) => a - b)
+    if (sorted[2] - sorted[0] === 2 && sorted[1] - sorted[0] === 1) {
+      attrs.push('顺子')
+    } else if (sorted[1] - sorted[0] === 1 || sorted[2] - sorted[1] === 1) {
+      attrs.push('半顺')
+    } else {
+      attrs.push('杂六')
+    }
+  }
+  // 16类游戏属性 (3-18)
+  else if (rewardNum === 16) {
+    // 大小: 3-10小, 11-18大
+    attrs.push(total >= 11 ? '大' : '小')
+    // 单双
+    attrs.push(total % 2 === 0 ? '双' : '单')
+  }
+  // 11类游戏属性 (2-11)
+  else if (rewardNum === 11) {
+    // 大小: 2-6小, 7-11大
+    attrs.push(total >= 7 ? '大' : '小')
+    // 单双
+    attrs.push(total % 2 === 0 ? '双' : '单')
+  }
+  // 10类游戏属性 (1-10)
+  else if (rewardNum === 10) {
+    // 大小: 1-5小, 6-10大
+    attrs.push(total >= 6 ? '大' : '小')
+    // 单双
+    attrs.push(total % 2 === 0 ? '双' : '单')
+  }
+  // 36类游戏属性 (0-35)
+  else if (rewardNum === 36) {
+    // 大小: 0-17小, 18-35大
+    attrs.push(total >= 18 ? '大' : '小')
+    // 单双
+    attrs.push(total % 2 === 0 ? '双' : '单')
+  }
+
+  return attrs.join(' ')
+}
+
+// 获取验证结果的属性描述
+const verifyResultAttrs = computed(() => {
+  if (!verifyCalcData.value || !currentVerifyData.value) return ''
+  return getResultAttributes(
+    verifyCalcData.value.total,
+    verifyCalcData.value.n1,
+    verifyCalcData.value.n2,
+    verifyCalcData.value.n3,
+    currentVerifyData.value.rewardNum
+  )
+})
+
+// 判断当前是否是特殊玩法分组（用于验证弹框）
+const isCurrentSpecialGroup = computed(() => {
+  if (!currentVerifyData.value) return false
+  return isSpecialPlayGroup(currentVerifyData.value.groupName)
+})
+
+// 判断当前选中的玩法分组是否是特殊分组（用于列表显示）
+const isActiveGroupSpecial = computed(() => {
+  const group = playGroups.value.find(g => g.id === activeGroupId.value)
+  if (!group) return false
+  return isSpecialPlayGroup(group.name)
+})
+
+// 判断当前游戏是否是幸运彩类型（不需要验证按钮）
+const isLuckyLottery = computed(() => {
+  const game = allGames.value.find(g => g.id === activeGame.value)
+  return game?.colorClass === 'system'
+})
+
+// 获取特殊玩法分组的结果文本
+const specialGroupResult = computed(() => {
+  if (!currentVerifyData.value) return ''
+  return extractResultFromFinalRes(currentVerifyData.value.finalResRecord)
+})
 
 // My bet history computed from API
 const myBetHistory = computed(() => {
@@ -1574,7 +2073,7 @@ const trendData = computed(() => {
 const allGames = ref<{ id: number; name: string; logo?: string; colorClass: string }[]>([])
 
 // Play method groups from API
-const playGroups = ref<{ id: number; name: string; info?: string }[]>([])
+const playGroups = ref<{ id: number; name: string; info?: string; reward_num?: number; start_num?: number; game_type?: number }[]>([])
 
 // Group config map for betMultiplier and startNum (used by mode edit 定额梭哈)
 const groupConfigMap = ref<Record<number, { betMultiplier: string; startNum: number }>>({})
@@ -1725,6 +2224,93 @@ const profitHasMore = ref(true)
 let countdownTimer: ReturnType<typeof setInterval> | null = null
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
+// Pool base
+// 生成更真实的奖池金额
+const getPoolBase = () => {
+  const baseNum = 5738500000
+  const randomPart = Math.floor(Math.random() * 100000)
+  return baseNum + randomPart
+}
+const poolBase = getPoolBase()
+
+// 根据期号生成伪随机数（相同期号总是返回相同的值，刷新不变）
+const getSeededRandom = (expectNo: string, salt: number = 0) => {
+  let seed = salt
+  for (let i = 0; i < expectNo.length; i++) {
+    seed += expectNo.charCodeAt(i) * (i + 1)
+  }
+  return ((seed * 9301 + 49297) % 233280) / 233280
+}
+
+// 根据期号生成稳定的奖池变化（已开奖记录，刷新不变）
+const getPoolVariation = (expectNo: string, index: number) => {
+  const variation = getSeededRandom(expectNo, 1)
+  // 基于种子生成随机变化量（-500万 到 +500万）
+  const baseVariation = Math.floor((variation - 0.5) * 10000000)
+  // 加入一些基于index的递增/递减趋势，让奖池看起来有涨跌
+  const trendVariation = (index % 5 - 2) * Math.floor(variation * 500000)
+  return baseVariation + trendVariation
+}
+
+// 获取已开奖记录的奖池值（固定不变，基于期号确定）
+const getFixedPool = (expectNo: string, baseValue: number) => {
+  const variation = getSeededRandom(expectNo, 3)
+  // 添加基于期号的固定增量（0-50000）
+  const fixedIncrement = Math.floor(variation * 50000)
+  return baseValue + fixedIncrement
+}
+
+// 根据奖池大小生成已开奖记录的参与人数（固定不变，最少300人起）
+const getFixedJoinCount = (expectNo: string, poolValue: number, baseJoinCount: number) => {
+  const variation = getSeededRandom(expectNo, 2)
+  // 基础人数300-600之间
+  const baseMin = 300 + Math.floor(variation * 300)
+  // 基于奖池计算额外参与人数（奖池越大，人数越多）
+  const poolBasedCount = Math.floor(poolValue / 100000000 * variation * 50)
+  // 基础人数 + 奖池关联人数 + 原始数据
+  return baseMin + poolBasedCount + Math.max(0, baseJoinCount)
+}
+
+// 当前期的奖池缓存（只增不减）
+const currentPeriodPoolCache = ref<number>(0)
+const currentPeriodJoinCache = ref<number>(0)
+const lastTrackedPeriod = ref<string>('')  // 用于跟踪期号变化
+
+// 已结束期号的奖池和参与数缓存（用于保持开奖前后数值一致）
+const finishedPeriodCache = ref<Map<string, { pool: number; joinCount: number }>>(new Map())
+
+// 获取当前期的奖池值（只增不减）
+const getCurrentPeriodPool = (baseValue: number) => {
+  const increment = Math.floor(Math.random() * 50000)
+  const newValue = baseValue + increment
+  if (currentPeriodPoolCache.value > 0) {
+    const finalValue = Math.max(currentPeriodPoolCache.value, newValue)
+    currentPeriodPoolCache.value = finalValue
+    return finalValue
+  }
+  currentPeriodPoolCache.value = newValue
+  return newValue
+}
+
+// 获取当前期的参与人数（只增不减，最少300人起）
+const getCurrentPeriodJoinCount = (poolValue: number, baseJoinCount: number) => {
+  const variation = Math.random()
+  // 基础人数300-600之间
+  const baseMin = 300 + Math.floor(variation * 300)
+  // 基于奖池计算额外参与人数
+  const poolBasedCount = Math.floor(poolValue / 100000000 * variation * 50)
+  const baseCount = baseMin + poolBasedCount + Math.max(0, baseJoinCount)
+  const increment = Math.floor(Math.random() * 15)
+  const newValue = baseCount + increment
+  if (currentPeriodJoinCache.value > 0) {
+    const finalValue = Math.max(currentPeriodJoinCache.value, newValue)
+    currentPeriodJoinCache.value = finalValue
+    return finalValue
+  }
+  currentPeriodJoinCache.value = newValue
+  return newValue
+}
+
 // Current period row (from expectInfo) - shown at top of list
 const currentPeriodRow = computed(() => {
   if (!currExpectInfo.value) return null
@@ -1738,15 +2324,32 @@ const currentPeriodRow = computed(() => {
     status = 'waiting'
   }
 
+  // 当前期奖池和参与人数：投注期间动态增加，封盘后固定不变
+  let currentPoolValue: number
+  let currentJoinCount: number
+
+  if (status === 'betting') {
+    // 投注期间：动态增加（只增不减）
+    currentPoolValue = getCurrentPeriodPool(poolBase)
+    currentJoinCount = getCurrentPeriodJoinCount(currentPoolValue, 100)
+  } else {
+    // 封盘后：使用缓存的固定值
+    currentPoolValue = currentPeriodPoolCache.value > 0 ? currentPeriodPoolCache.value : poolBase
+    currentJoinCount = currentPeriodJoinCache.value > 0 ? currentPeriodJoinCache.value : 100
+  }
+
   return {
     no: currExpectInfo.value.expect_no || '',
     date: currExpectInfo.value.action_time || '',
     nums: null,
     result: null,
     finalResRecord: '',
-    pool: '-',
+    calcResult: null,
+    resultAttrs: [] as string[],
+    specialResultText: '',
+    pool: currentPoolValue.toLocaleString(),
     winGold: '-',
-    joinCount: 0,
+    joinCount: currentJoinCount,
     betGold: '-',
     myWin: 0,
     status,
@@ -1754,17 +2357,11 @@ const currentPeriodRow = computed(() => {
   }
 })
 
-// Pool base
-const getPoolBase = () => {
-  const baseNum = 5738500000
-  const randomPart = Math.floor(Math.random() * 100000)
-  return baseNum + randomPart
-}
-const poolBase = getPoolBase()
-
 // Computed draw history from lottery records (only opened records)
 const drawHistory = computed(() => {
   const openedRecords = lotteryRecords.value.filter(record => record.is_opened === 1)
+  const currentGame = allGames.value.find(g => g.id === activeGame.value)
+  const group = playGroups.value.find(g => g.id === activeGroupId.value)
 
   const historyList = openedRecords.map(record => {
     const finalRes = record.final_res
@@ -1790,17 +2387,88 @@ const drawHistory = computed(() => {
     const memberBet = Array.isArray(record.memberBet) ? record.memberBet[0] : record.memberBet
     const myWin = memberBet?.win_gold || 0
 
-    const poolValue = (record.user_bet_gold || 0) + poolBase
-    const joinCount = (record.all_hand_person_num || 0) + (record.win_auto_person_num || 0) + (record.win_auto_robot_num || 0)
+    // 奖池金额和参与人数：优先使用缓存值（保持开奖前后一致），否则使用固定算法
+    const expectNo = record.expect_no || ''
+    const cachedValues = finishedPeriodCache.value.get(expectNo)
+
+    let poolValue: number
+    let joinCount: number
+
+    if (cachedValues) {
+      // 使用缓存的值（该期开奖前显示的值）
+      poolValue = cachedValues.pool
+      joinCount = cachedValues.joinCount
+    } else {
+      // 没有缓存时使用固定算法（刷新页面后或历史记录）
+      const recordIndex = openedRecords.indexOf(record)
+      const poolVariation = getPoolVariation(expectNo, recordIndex)
+      const basePoolValue = Math.max(poolBase + (record.user_bet_gold || 0) + poolVariation, poolBase * 0.8)
+      poolValue = getFixedPool(expectNo, basePoolValue)
+
+      const baseJoinCount = (record.all_hand_person_num || 0) + (record.win_auto_person_num || 0) + (record.win_auto_robot_num || 0)
+      joinCount = getFixedJoinCount(expectNo, poolValue, baseJoinCount)
+    }
     const winGold = record.user_bet_win_gold || 0
     const betGold = record.bet_gold || 0
+
+    // 计算区位结果用于列表显示
+    let calcResult: { n1: number; n2: number; n3: number; total: number; zoneCount: number } | null = null
+    if (record.action_no_sort) {
+      const calcData = calculateVerifyFromActionNo(
+        record.action_no_sort,
+        group?.id || 0,
+        group?.info || '',
+        group?.reward_num || 28,
+        group?.game_type || 0,
+        currentGame?.name || '',
+        activeGame.value
+      )
+      if (calcData) {
+        calcResult = {
+          n1: calcData.n1,
+          n2: calcData.n2,
+          n3: calcData.n3,
+          total: calcData.total,
+          zoneCount: calcData.zoneCount
+        }
+      }
+    }
+
+    // 解析finalResRecord获取属性（如 "14|大双" -> { sum: 14, attrs: "大双" }）
+    const finalResRecord = finalRes?.finalResRecord || ''
+    let resultAttrs: string[] = []
+    let specialResultText = ''  // 特殊分组的结果文本（如"半顺"、"杂六"、"虎"、"小单"）
+
+    if (finalResRecord) {
+      const pipeIndex = finalResRecord.indexOf('|')
+      if (pipeIndex !== -1) {
+        const attrsStr = finalResRecord.substring(pipeIndex + 1).trim()
+        // 保存特殊分组的完整结果文本
+        specialResultText = attrsStr
+        // 将属性字符串拆分成单个属性（如 "大双" -> ["大", "双"]）
+        resultAttrs = attrsStr.split('').filter(c => c.trim())
+        // 如果是两个字符一组的情况（如"小单"），保持原样
+        if (attrsStr.length >= 2 && !attrsStr.includes(' ')) {
+          resultAttrs = []
+          for (let i = 0; i < attrsStr.length; i++) {
+            resultAttrs.push(attrsStr[i])
+          }
+        }
+      } else {
+        // 没有 | 的情况，整个字符串就是结果
+        specialResultText = finalResRecord
+      }
+    }
 
     return {
       no: record.expect_no || '',
       date: record.open_time || record.created_at || '',
       nums,
       result,
-      finalResRecord: finalRes?.finalResRecord || '',
+      finalResRecord,
+      calcResult,
+      resultAttrs,
+      specialResultText,
       pool: poolValue.toLocaleString(),
       winGold: winGold.toLocaleString(),
       joinCount,
@@ -1884,7 +2552,10 @@ const fetchPlayGroups = async (lotteryId: number) => {
         .map((group: any) => ({
           id: group.id,
           name: group.name,
-          info: group.info
+          info: group.info,
+          reward_num: group.reward_num,
+          start_num: group.start_num,
+          game_type: group.game_type
         }))
 
       if (playGroups.value.length > 0) {
@@ -1979,6 +2650,23 @@ const fetchExpectInfoData = async () => {
       game_group_id: activeGroupId.value
     })
     if (res.code === 200 && res.data) {
+      const newExpectNo = res.data.currExpectInfo?.expect_no || ''
+
+      // 期号变化时：先保存旧期号的缓存值，再重置
+      if (newExpectNo && newExpectNo !== lastTrackedPeriod.value) {
+        // 保存旧期号的奖池和参与数到缓存（开奖后显示时使用）
+        if (lastTrackedPeriod.value && currentPeriodPoolCache.value > 0) {
+          finishedPeriodCache.value.set(lastTrackedPeriod.value, {
+            pool: currentPeriodPoolCache.value,
+            joinCount: currentPeriodJoinCache.value
+          })
+        }
+        // 重置当前期缓存
+        currentPeriodPoolCache.value = 0
+        currentPeriodJoinCache.value = 0
+        lastTrackedPeriod.value = newExpectNo
+      }
+
       currExpectInfo.value = res.data.currExpectInfo || null
       lastExpectInfo.value = res.data.lastExpectInfo || null
 
@@ -2139,6 +2827,54 @@ const profitVisiblePages = computed(() => {
   return pages
 })
 
+// Fetch ranking data - 同时获取三个榜单
+const fetchRankData = async () => {
+  isLoadingRank.value = true
+  rankDataToday.value = []
+  rankDataYesterday.value = []
+  rankDataWeek.value = []
+
+  // 分别获取三个榜单，单个失败不影响其他
+  const fetchWithFallback = async <T>(fetchFn: () => Promise<HttpRes<T[]>>): Promise<T[]> => {
+    try {
+      const res = await fetchFn()
+      if (res.code === 200 && res.data) {
+        return res.data
+      }
+    } catch (error) {
+      console.error('获取排行数据失败:', error)
+    }
+    return []
+  }
+
+  try {
+    const [todayData, yesterdayData, weekData] = await Promise.all([
+      fetchWithFallback(rankToday),
+      fetchWithFallback(rankYesterday),
+      fetchWithFallback(rankWeek)
+    ])
+    rankDataToday.value = todayData as RankTodayField[]
+    rankDataYesterday.value = yesterdayData as RankTodayField[]
+    rankDataWeek.value = weekData as RankWeekField[]
+  } finally {
+    isLoadingRank.value = false
+  }
+}
+
+// Get medal class for ranking
+const getMedalClass = (rank: number) => {
+  switch (rank) {
+    case 1:
+      return 'medal-gold'
+    case 2:
+      return 'medal-silver'
+    case 3:
+      return 'medal-bronze'
+    default:
+      return 'medal-normal'
+  }
+}
+
 // Select a game
 const selectGame = async (gameId: number) => {
   activeGame.value = gameId
@@ -2228,6 +2964,8 @@ const setActivePanel = async (panel: string) => {
     await fetchProfitLossData(true)
   } else if (panel === 'trend') {
     await fetchTrendData()
+  } else if (panel === 'ranking') {
+    await fetchRankData()
   }
 }
 
@@ -2442,6 +3180,16 @@ const rightPlays = computed(() => {
 onMounted(async () => {
   await fetchAllGames()
   startCountdownTimer()
+
+  // Handle lottery query parameter from homepage
+  const lotteryId = route.query.lottery
+  if (lotteryId && allGames.value.length > 0) {
+    const targetId = Number(lotteryId)
+    const gameExists = allGames.value.some(g => g.id === targetId)
+    if (gameExists) {
+      selectGame(targetId)
+    }
+  }
 })
 
 onUnmounted(() => {
@@ -2557,7 +3305,7 @@ onUnmounted(() => {
                     <th class="col-date">游戏时间</th>
                     <th class="col-result">结果</th>
                     <th class="col-pool">奖池</th>
-                    <th class="col-win">中奖</th>
+                    <!-- <th class="col-win">中奖</th> -->
                     <th class="col-join">参与数</th>
                     <th class="col-bet">投注额</th>
                     <th class="col-mywin">我的中奖</th>
@@ -2569,15 +3317,84 @@ onUnmounted(() => {
                     <td class="col-no">{{ item.no }}</td>
                     <td class="col-date">{{ item.date }}</td>
                     <td class="col-result">
-                      <template v-if="item.status === 'ended' && item.finalResRecord">
-                        <span class="result-text">{{ item.finalResRecord }}</span>
+                      <!-- 幸运彩类型：直接显示开奖号码和结果，无验证按钮 -->
+                      <template v-if="item.status === 'ended' && isLuckyLottery">
+                        <div class="result-display result-display-center">
+                          <!-- 显示开奖号码 -->
+                          <template v-if="item.nums && item.nums.length > 0">
+                            <span v-for="(num, idx) in item.nums" :key="idx" class="num-circle">{{ num }}</span>
+                            <span class="equals-sign">=</span>
+                          </template>
+                          <!-- 显示和值结果 -->
+                          <span class="result-circle">{{ String(item.result ?? 0).padStart(2, '0') }}</span>
+                          <span v-if="item.specialResultText" class="result-text result-text-ml">{{ item.specialResultText }}</span>
+                        </div>
+                      </template>
+                      <!-- 特殊分组（号码形态、龙虎豹、大小单双）显示样式 -->
+                      <template v-else-if="item.status === 'ended' && item.calcResult && isActiveGroupSpecial">
+                        <div class="result-display result-display-center">
+                          <!-- 三个数字分别显示在圆圈中 -->
+                          <template v-if="item.calcResult.zoneCount === 3">
+                            <span class="num-circle">{{ item.calcResult.n1 }}</span>
+                            <span class="num-circle">{{ item.calcResult.n2 }}</span>
+                            <span class="num-circle">{{ item.calcResult.n3 }}</span>
+                          </template>
+                          <template v-else-if="item.calcResult.zoneCount === 2">
+                            <span class="num-circle">{{ item.calcResult.n1 }}</span>
+                            <span class="num-circle">{{ item.calcResult.n2 }}</span>
+                          </template>
+                          <template v-else>
+                            <span class="num-circle">{{ item.calcResult.n1 }}</span>
+                          </template>
+                          <span class="equals-sign">=</span>
+                          <!-- 结果文本标签 -->
+                          <span :class="['result-text-badge', getSpecialResultClass(item.specialResultText)]">{{ item.specialResultText }}</span>
+                          <!-- 验证按钮 -->
+                          <button type="button" class="verify-btn" @click.stop="openVerifyModal(item)">验证</button>
+                        </div>
+                      </template>
+                      <!-- 普通分组（和值等）显示样式 -->
+                      <template v-else-if="item.status === 'ended' && item.calcResult">
+                        <div class="result-display result-display-center">
+                          <!-- 计算公式 -->
+                          <span class="calc-formula">
+                            <template v-if="item.calcResult.zoneCount === 3">
+                              {{ item.calcResult.n1 }} + {{ item.calcResult.n2 }} + {{ item.calcResult.n3 }} =
+                            </template>
+                            <template v-else-if="item.calcResult.zoneCount === 2">
+                              {{ item.calcResult.n1 }} + {{ item.calcResult.n2 }} =
+                            </template>
+                            <template v-else>
+                              {{ item.calcResult.n1 }} =
+                            </template>
+                          </span>
+                          <!-- 结果数字（红色圆形） -->
+                          <span class="result-circle">{{ String(item.calcResult.total).padStart(2, '0') }}</span>
+                          <!-- 验证按钮 -->
+                          <button type="button" class="verify-btn" @click.stop="openVerifyModal(item)">验证</button>
+                        </div>
+                      </template>
+                      <template v-else-if="item.status === 'ended' && (item.finalResRecord || item.result !== null)">
+                        <div class="result-display result-display-center">
+                          <!-- 显示开奖号码 -->
+                          <template v-if="item.nums && item.nums.length > 0">
+                            <span v-for="(num, idx) in item.nums" :key="idx" class="num-circle">{{ num }}</span>
+                            <span class="equals-sign">=</span>
+                          </template>
+                          <!-- 显示和值结果 -->
+                          <template v-if="item.result !== null">
+                            <span class="result-circle">{{ String(item.result).padStart(2, '0') }}</span>
+                          </template>
+                          <span v-if="item.specialResultText" class="result-text result-text-ml">{{ item.specialResultText }}</span>
+                          <button type="button" class="verify-btn" @click.stop="openVerifyModal(item)">验证</button>
+                        </div>
                       </template>
                       <template v-else-if="item.isCurrent">
                         <span class="waiting-result">等待开奖</span>
                       </template>
                     </td>
                     <td class="col-pool"><span class="coin">{{ item.pool }}</span></td>
-                    <td class="col-win"><span class="coin">{{ item.winGold }}</span></td>
+                    <!-- <td class="col-win"><span class="coin">{{ item.winGold }}</span></td> -->
                     <td class="col-join">{{ item.joinCount }}</td>
                     <td class="col-bet"><span class="coin">{{ item.betGold }}</span></td>
                     <td class="col-mywin"><span class="coin">{{ item.myWin }}</span></td>
@@ -2694,6 +3511,114 @@ onUnmounted(() => {
                       </template>
                       <tr v-else>
                         <td colspan="4" class="bet-detail-empty">无投注明细</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- Verify Modal - 验证弹框 -->
+            <div v-if="showVerifyModal" class="verify-modal-overlay" @click.self="closeVerifyModal">
+              <div class="verify-modal">
+                <div class="verify-modal-header">
+                  <h2>第{{ currentVerifyData?.no }}期开奖验证</h2>
+                  <span class="modal-close" @click="closeVerifyModal">&times;</span>
+                </div>
+                <div class="verify-modal-body">
+                  <table class="verify-table">
+                    <tbody>
+                      <!-- 官方结果 -->
+                      <tr>
+                        <td class="label-cell">{{ currentVerifyData?.gameName || '游戏' }}官方结果</td>
+                        <td :colspan="verifyCalcData?.zoneCount || 3">
+                          <div class="source-data">{{ currentVerifyData?.actionNo || '-' }}</div>
+                        </td>
+                      </tr>
+                      <!-- 计算说明 - 3区游戏 -->
+                      <template v-if="verifyCalcData && verifyCalcData.zoneCount === 3">
+                        <tr>
+                          <td class="label-cell" :rowspan="verifyCalcData.calcMethod === 'mod6Plus1' ? 3 : (isCurrentSpecialGroup ? 3 : 2)">计算：</td>
+                          <td>一区({{ verifyCalcData.zone1Desc }})</td>
+                          <td>二区({{ verifyCalcData.zone2Desc }})</td>
+                          <td>三区({{ verifyCalcData.zone3Desc }})</td>
+                        </tr>
+                        <tr>
+                          <td>和值 {{ verifyCalcData.zone1Sum }}</td>
+                          <td>和值 {{ verifyCalcData.zone2Sum }}</td>
+                          <td>和值 {{ verifyCalcData.zone3Sum }}</td>
+                        </tr>
+                        <!-- 三取余(16类)显示÷6余数+1 -->
+                        <tr v-if="verifyCalcData.calcMethod === 'mod6Plus1'">
+                          <td class="final-nums">{{ verifyCalcData.zone1Sum }}÷6余数+1 = {{ verifyCalcData.n1 }}</td>
+                          <td class="final-nums">{{ verifyCalcData.zone2Sum }}÷6余数+1 = {{ verifyCalcData.n2 }}</td>
+                          <td class="final-nums">{{ verifyCalcData.zone3Sum }}÷6余数+1 = {{ verifyCalcData.n3 }}</td>
+                        </tr>
+                        <!-- 特殊玩法分组显示取尾结果(28类) -->
+                        <tr v-else-if="isCurrentSpecialGroup">
+                          <td class="final-nums">取尾 {{ verifyCalcData.n1 }}</td>
+                          <td class="final-nums">取尾 {{ verifyCalcData.n2 }}</td>
+                          <td class="final-nums">取尾 {{ verifyCalcData.n3 }}</td>
+                        </tr>
+                      </template>
+                      <!-- 计算说明 - 2区游戏（二取余） -->
+                      <template v-else-if="verifyCalcData && verifyCalcData.zoneCount === 2">
+                        <tr>
+                          <td class="label-cell" :rowspan="3">计算：</td>
+                          <td>一区({{ verifyCalcData.zone1Desc }})</td>
+                          <td>二区({{ verifyCalcData.zone2Desc }})</td>
+                        </tr>
+                        <tr>
+                          <td>和值 {{ verifyCalcData.zone1Sum }}</td>
+                          <td>和值 {{ verifyCalcData.zone2Sum }}</td>
+                        </tr>
+                        <!-- 二取余显示÷6余数+1 -->
+                        <tr>
+                          <td class="final-nums">{{ verifyCalcData.zone1Sum }}÷6余数+1 = {{ verifyCalcData.n1 }}</td>
+                          <td class="final-nums">{{ verifyCalcData.zone2Sum }}÷6余数+1 = {{ verifyCalcData.n2 }}</td>
+                        </tr>
+                      </template>
+                      <!-- 计算说明 - 1区游戏（前七取尾） -->
+                      <template v-else-if="verifyCalcData && verifyCalcData.zoneCount === 1">
+                        <tr>
+                          <td class="label-cell" :rowspan="3">计算：</td>
+                          <td>{{ verifyCalcData.zone1Desc }}</td>
+                        </tr>
+                        <tr>
+                          <td>和值 {{ verifyCalcData.zone1Sum }}</td>
+                        </tr>
+                        <!-- 尾数+1 -->
+                        <tr>
+                          <td class="final-nums">尾数+1：{{ verifyCalcData.zone1Sum % 10 }}+1 = {{ verifyCalcData.n1 }}</td>
+                        </tr>
+                      </template>
+                      <!-- 最终结果 -->
+                      <tr>
+                        <td class="label-cell">结果：</td>
+                        <td :colspan="verifyCalcData?.zoneCount || 3">
+                          <!-- 特殊玩法分组：只显示文字结果（如：虎、小单、半顺） -->
+                          <template v-if="isCurrentSpecialGroup">
+                            <span class="special-result">{{ specialGroupResult || '-' }}</span>
+                          </template>
+                          <!-- 普通玩法分组：只显示数字计算，不显示属性描述 -->
+                          <template v-else>
+                            <span class="result-formula" v-if="verifyCalcData">
+                              <template v-if="verifyCalcData.zoneCount === 3">
+                                {{ verifyCalcData.n1 }} + {{ verifyCalcData.n2 }} + {{ verifyCalcData.n3 }} =
+                              </template>
+                              <template v-else-if="verifyCalcData.zoneCount === 2">
+                                {{ verifyCalcData.n1 }} + {{ verifyCalcData.n2 }} =
+                              </template>
+                              <template v-else-if="verifyCalcData.zoneCount === 1">
+                                {{ verifyCalcData.n1 - 1 }} + 1 =
+                              </template>
+                              <span class="result-num" :class="getNumColorClass(String(verifyCalcData.total).padStart(2, '0'))">{{ verifyCalcData.total }}</span>
+                            </span>
+                            <span class="result-formula" v-else>
+                              <span class="result-num" :class="getNumColorClass(String(currentVerifyData?.result).padStart(2, '0'))">{{ currentVerifyData?.result ?? '-' }}</span>
+                            </span>
+                          </template>
+                        </td>
                       </tr>
                     </tbody>
                   </table>
@@ -3103,6 +4028,106 @@ onUnmounted(() => {
                 <template v-else>
                   <div class="rule-empty">请选择玩法分组查看规则</div>
                 </template>
+              </div>
+            </div>
+
+            <!-- Ranking Panel -->
+            <div class="panel ranking-panel" v-show="activePanel === 'ranking'">
+              <div class="ranking-container">
+                <!-- Three columns layout -->
+                <div class="ranking-columns">
+                  <!-- 今日盈利榜 -->
+                  <div class="ranking-column">
+                    <div class="ranking-header">今日盈利榜</div>
+                    <div v-if="isLoadingRank" class="ranking-loading">
+                      <div v-for="i in 10" :key="`today-skeleton-${i}`" class="rank-skeleton">
+                        <div class="skeleton-medal"></div>
+                        <div class="skeleton-info"><div class="skeleton-name"></div><div class="skeleton-bet"></div></div>
+                        <div class="skeleton-score"></div>
+                      </div>
+                    </div>
+                    <div v-else-if="rankDataToday.length === 0" class="ranking-empty">暂无数据</div>
+                    <div v-else class="ranking-list">
+                      <div v-for="(item, index) in rankDataToday" :key="`today-${item.id}`" class="rank-item">
+                        <span :class="['rank-medal', getMedalClass(index + 1)]">{{ index + 1 }}</span>
+                        <div class="rank-info">
+                          <div class="rank-name-row">
+                            <img :src="`/ranking/vip/${item.member?.level || 1}.png`" alt="VIP" class="rank-vip" @error="($event.target as HTMLImageElement).style.display = 'none'" />
+                            <span class="rank-name">{{ item.member_field?.nickname || item.member?.user || '玩家' }}</span>
+                          </div>
+                          <div class="rank-bet">
+                            <img src="/ranking/coin.png" alt="金豆" class="bet-icon" @error="($event.target as HTMLImageElement).style.display = 'none'" />
+                            <span>或 {{ item.bet_gold?.toLocaleString() || 0 }}</span>
+                          </div>
+                        </div>
+                        <div class="rank-score">
+                          <span class="score-value">{{ item.profit?.toLocaleString() || 0 }}</span>
+                          <img src="/ranking/coin.png" alt="金豆" class="score-icon" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 昨日盈利榜 -->
+                  <div class="ranking-column">
+                    <div class="ranking-header">昨日盈利榜</div>
+                    <div v-if="isLoadingRank" class="ranking-loading">
+                      <div v-for="i in 10" :key="`yesterday-skeleton-${i}`" class="rank-skeleton">
+                        <div class="skeleton-medal"></div>
+                        <div class="skeleton-info"><div class="skeleton-name"></div><div class="skeleton-bet"></div></div>
+                        <div class="skeleton-score"></div>
+                      </div>
+                    </div>
+                    <div v-else-if="rankDataYesterday.length === 0" class="ranking-empty">暂无数据</div>
+                    <div v-else class="ranking-list">
+                      <div v-for="(item, index) in rankDataYesterday" :key="`yesterday-${item.id}`" class="rank-item">
+                        <span :class="['rank-medal', getMedalClass(index + 1)]">{{ index + 1 }}</span>
+                        <div class="rank-info">
+                          <div class="rank-name-row">
+                            <img :src="`/ranking/vip/${item.member?.level || 1}.png`" alt="VIP" class="rank-vip" @error="($event.target as HTMLImageElement).style.display = 'none'" />
+                            <span class="rank-name">{{ item.member_field?.nickname || item.member?.user || '玩家' }}</span>
+                          </div>
+                          <div class="rank-bet">
+                            <img src="/ranking/coin.png" alt="金豆" class="bet-icon" @error="($event.target as HTMLImageElement).style.display = 'none'" />
+                            <span>或 {{ item.bet_gold?.toLocaleString() || 0 }}</span>
+                          </div>
+                        </div>
+                        <div class="rank-score">
+                          <span class="score-value">{{ item.profit?.toLocaleString() || 0 }}</span>
+                          <img src="/ranking/coin.png" alt="金豆" class="score-icon" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 上周盈利榜 -->
+                  <div class="ranking-column">
+                    <div class="ranking-header">上周盈利榜</div>
+                    <div v-if="isLoadingRank" class="ranking-loading">
+                      <div v-for="i in 10" :key="`week-skeleton-${i}`" class="rank-skeleton">
+                        <div class="skeleton-medal"></div>
+                        <div class="skeleton-info"><div class="skeleton-name"></div></div>
+                        <div class="skeleton-score"></div>
+                      </div>
+                    </div>
+                    <div v-else-if="rankDataWeek.length === 0" class="ranking-empty">暂无数据</div>
+                    <div v-else class="ranking-list">
+                      <div v-for="item in rankDataWeek" :key="`week-${item.rank}`" class="rank-item">
+                        <span :class="['rank-medal', getMedalClass(item.rank)]">{{ item.rank }}</span>
+                        <div class="rank-info">
+                          <div class="rank-name-row">
+                            <img :src="`/ranking/vip/${item.level}.png`" alt="VIP" class="rank-vip" @error="($event.target as HTMLImageElement).style.display = 'none'" />
+                            <span class="rank-name">{{ item.name }}</span>
+                          </div>
+                        </div>
+                        <div class="rank-score">
+                          <span class="score-value">{{ item.score?.toLocaleString() || 0 }}</span>
+                          <img src="/ranking/coin.png" alt="金豆" class="score-icon" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -4232,7 +5257,7 @@ onUnmounted(() => {
 
 .draw-table .col-no { width: 90px; }
 .draw-table .col-date { width: 130px; white-space: nowrap; }
-.draw-table .col-result { min-width: 260px; }
+.draw-table .col-result { min-width: 320px; text-align: center; }
 .draw-table .col-pool { width: 120px; }
 .draw-table .col-win { width: 80px; }
 .draw-table .col-join { width: 70px; }
@@ -4243,7 +5268,166 @@ onUnmounted(() => {
 .draw-table tr.current-row { background: #fffbe6; }
 .draw-table tr.current-row td { border-color: #ffe58f; }
 
+/* 结果显示区域 */
+.result-display {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* 计算公式 */
+.calc-formula {
+  color: #666;
+  font-size: 13px;
+  font-family: 'Monaco', 'Consolas', monospace;
+}
+
+/* 结果数字红色圆形 */
+.result-circle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(135deg, #ff4d4f 0%, #cf1322 100%);
+  color: #fff;
+  font-size: 13px;
+  font-weight: bold;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(207, 19, 34, 0.3);
+}
+
+/* 属性标签容器 */
+.result-attrs {
+  display: flex;
+  gap: 4px;
+  margin-left: 4px;
+}
+
+/* 属性标签基础样式 */
+.attr-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+/* 大/龙 - 红色 */
+.attr-big {
+  background: linear-gradient(135deg, #ff4d4f 0%, #cf1322 100%);
+  color: #fff;
+}
+
+/* 小/虎 - 蓝色 */
+.attr-small {
+  background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+  color: #fff;
+}
+
+/* 单 - 红色 */
+.attr-odd {
+  background: linear-gradient(135deg, #ff7875 0%, #ff4d4f 100%);
+  color: #fff;
+}
+
+/* 双 - 蓝色 */
+.attr-even {
+  background: linear-gradient(135deg, #69c0ff 0%, #1890ff 100%);
+  color: #fff;
+}
+
+/* 豹 - 金色 */
+.attr-leopard {
+  background: linear-gradient(135deg, #ffc53d 0%, #faad14 100%);
+  color: #fff;
+}
+
+/* 形态 - 绿色 */
+.attr-shape {
+  background: linear-gradient(135deg, #95de64 0%, #52c41a 100%);
+  color: #fff;
+}
+
+/* 默认 - 灰色 */
+.attr-default {
+  background: linear-gradient(135deg, #d9d9d9 0%, #bfbfbf 100%);
+  color: #595959;
+}
+
+/* 居中显示 */
+.result-display-center {
+  justify-content: center;
+}
+
+/* 特殊分组的数字圆圈 */
+.num-circle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: #fff;
+  color: #ff7a45;
+  font-size: 14px;
+  font-weight: bold;
+  border: 2px solid #ff7a45;
+  border-radius: 50%;
+  margin: 0 2px;
+}
+
+/* 等号 */
+.equals-sign {
+  color: #999;
+  font-size: 16px;
+  margin: 0 6px;
+}
+
+/* 特殊结果文本标签 */
+.result-text-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 28px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 4px;
+  color: #fff;
+}
+
+/* 号码形态颜色 */
+.special-shunzi { background: linear-gradient(135deg, #ff4d4f 0%, #cf1322 100%); }  /* 顺子 - 红色 */
+.special-banshun { background: linear-gradient(135deg, #ff7a45 0%, #fa541c 100%); } /* 半顺 - 橙色 */
+.special-zaliu { background: linear-gradient(135deg, #95de64 0%, #52c41a 100%); }   /* 杂六 - 绿色 */
+.special-duizi { background: linear-gradient(135deg, #ffc53d 0%, #faad14 100%); }   /* 对子 - 金色 */
+.special-baozi { background: linear-gradient(135deg, #b37feb 0%, #722ed1 100%); }   /* 豹子 - 紫色 */
+
+/* 龙虎豹颜色 */
+.special-long { background: linear-gradient(135deg, #ff4d4f 0%, #cf1322 100%); }    /* 龙 - 红色 */
+.special-hu { background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%); }      /* 虎 - 蓝色 */
+.special-bao { background: linear-gradient(135deg, #ffc53d 0%, #faad14 100%); }     /* 豹 - 金色 */
+
+/* 大小单双颜色 */
+.special-da { background: linear-gradient(135deg, #ff4d4f 0%, #cf1322 100%); }      /* 大 - 红色 */
+.special-xiao { background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%); }    /* 小 - 蓝色 */
+.special-dan { background: linear-gradient(135deg, #ff7875 0%, #ff4d4f 100%); }     /* 单 - 浅红 */
+.special-shuang { background: linear-gradient(135deg, #69c0ff 0%, #1890ff 100%); }  /* 双 - 浅蓝 */
+.special-dadan { background: linear-gradient(135deg, #ff4d4f 0%, #cf1322 100%); }   /* 大单 - 红色 */
+.special-dashuang { background: linear-gradient(135deg, #ff7a45 0%, #fa541c 100%); } /* 大双 - 橙色 */
+.special-xiaodan { background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%); } /* 小单 - 蓝色 */
+.special-xiaoshuang { background: linear-gradient(135deg, #36cfc9 0%, #13c2c2 100%); } /* 小双 - 青色 */
+.special-default { background: linear-gradient(135deg, #d9d9d9 0%, #bfbfbf 100%); color: #595959; }
+
 .result-text { color: #333; font-size: 13px; margin-right: 10px; }
+.result-text-ml { margin-left: 8px; }
 .waiting-result { color: #999; font-style: italic; }
 
 .join-btn {
@@ -4782,6 +5966,155 @@ onUnmounted(() => {
   padding: 20px;
 }
 
+/* Verify Button - 验证按钮 */
+.verify-btn {
+  margin-left: 4px;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: #fff;
+  background: linear-gradient(to bottom, #ff7a45, #fa541c);
+  border: 1px solid #fa541c;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.verify-btn:hover {
+  background: linear-gradient(to bottom, #fa541c, #d4380d);
+  border-color: #d4380d;
+}
+
+/* Verify Modal - 验证弹框 */
+.verify-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.verify-modal {
+  background: #fff;
+  border-radius: 4px;
+  min-width: 550px;
+  max-width: 650px;
+  max-height: 80vh;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.verify-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 15px;
+  background: #f5f5f5;
+  border-bottom: 1px solid #ddd;
+}
+
+.verify-modal-header h2 {
+  font-size: 16px;
+  font-weight: bold;
+  color: #1e90ff;
+  margin: 0;
+}
+
+.verify-modal-header .modal-close {
+  font-size: 22px;
+  color: #999;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.verify-modal-header .modal-close:hover {
+  color: #333;
+}
+
+.verify-modal-body {
+  padding: 15px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+/* 验证表格样式 */
+.verify-table {
+  width: 100%;
+  border-spacing: 0;
+  border: 1px solid #1e90ff;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.verify-table td {
+  border: 1px solid #1e90ff;
+  padding: 8px 10px;
+  text-align: center;
+  color: #333;
+}
+
+.verify-table .label-cell {
+  width: 80px;
+  text-align: left;
+  background: #f8f8f8;
+  font-weight: 500;
+  color: #333;
+}
+
+.verify-table .source-data {
+  word-break: break-all;
+  text-align: left;
+  font-size: 13px;
+  color: #333;
+  line-height: 1.5;
+}
+
+.verify-table .result-formula {
+  font-size: 15px;
+  font-weight: bold;
+  color: #333;
+  text-align: left;
+}
+
+.verify-table .result-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: bold;
+  margin-left: 5px;
+  color: #fff;
+}
+
+.verify-table .result-attrs {
+  margin-left: 10px;
+  font-size: 14px;
+  font-weight: bold;
+  color: #1e90ff;
+}
+
+.verify-table .special-result {
+  font-size: 18px;
+  font-weight: bold;
+  color: #1e90ff;
+  padding: 5px 15px;
+  background: #e6f3ff;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.verify-table .final-nums {
+  font-weight: bold;
+  color: #1e90ff;
+}
+
 /* Add Mode */
 .add-mode-wrap { text-align: center; padding: 50px; }
 
@@ -4887,6 +6220,213 @@ onUnmounted(() => {
 .rule-empty {
   text-align: center;
   padding: 60px 20px;
+  color: #999;
+  font-size: 14px;
+}
+
+/* Ranking Panel */
+.ranking-panel {
+  padding: 10px;
+}
+
+.ranking-container {
+  background: #f5f5f5;
+  border-radius: 4px;
+  padding: 15px;
+}
+
+.ranking-columns {
+  display: flex;
+  gap: 15px;
+}
+
+.ranking-column {
+  flex: 1;
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.ranking-header {
+  background: #fff;
+  color: #e65c00;
+  font-size: 16px;
+  font-weight: bold;
+  text-align: center;
+  padding: 12px 15px;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.ranking-list {
+  max-height: 550px;
+  overflow-y: auto;
+}
+
+.rank-item {
+  display: flex;
+  align-items: flex-start;
+  padding: 8px 12px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.rank-item:last-child {
+  border-bottom: none;
+}
+
+.rank-medal {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: bold;
+  flex-shrink: 0;
+  margin-right: 8px;
+  margin-top: 2px;
+}
+
+.medal-gold {
+  background: linear-gradient(180deg, #ff8a4c 0%, #ff5722 100%);
+  color: #fff;
+  box-shadow: 0 2px 4px rgba(255, 87, 34, 0.3);
+}
+
+.medal-silver {
+  background: linear-gradient(180deg, #64b5f6 0%, #1976d2 100%);
+  color: #fff;
+  box-shadow: 0 2px 4px rgba(25, 118, 210, 0.3);
+}
+
+.medal-bronze {
+  background: linear-gradient(180deg, #81c784 0%, #388e3c 100%);
+  color: #fff;
+  box-shadow: 0 2px 4px rgba(56, 142, 60, 0.3);
+}
+
+.medal-normal {
+  background: #e8e8e8;
+  color: #ff6600;
+  font-weight: bold;
+}
+
+.rank-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.rank-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rank-vip {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.rank-name {
+  font-size: 14px;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rank-bet {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #e65c00;
+  margin-top: 3px;
+}
+
+.bet-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.rank-score {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.score-value {
+  font-size: 14px;
+  font-weight: bold;
+  color: #e65c00;
+}
+
+.score-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.ranking-loading {
+  padding: 10px;
+}
+
+.rank-skeleton {
+  display: flex;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.skeleton-medal {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #f0f0f0;
+  margin-right: 10px;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.skeleton-info {
+  flex: 1;
+}
+
+.skeleton-name {
+  width: 80px;
+  height: 14px;
+  background: #f0f0f0;
+  border-radius: 2px;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.skeleton-bet {
+  width: 60px;
+  height: 12px;
+  background: #f0f0f0;
+  border-radius: 2px;
+  margin-top: 6px;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.skeleton-score {
+  width: 70px;
+  height: 14px;
+  background: #f0f0f0;
+  border-radius: 2px;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.ranking-empty {
+  text-align: center;
+  padding: 40px 20px;
   color: #999;
   font-size: 14px;
 }

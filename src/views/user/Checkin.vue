@@ -111,10 +111,10 @@ onMounted(async () => {
     const res = await signStat()
     if (res.code === 200 && res.data) {
       stats.value = {
-        todayCount: res.data.today_count || stats.value.todayCount,
-        totalAmount: res.data.total_amount || stats.value.totalAmount,
-        consecutiveDays: res.data.consecutive_days || stats.value.consecutiveDays,
-        currentReward: res.data.current_reward || stats.value.currentReward
+        todayCount: res.data.total_people || stats.value.todayCount,
+        totalAmount: res.data.total_points || stats.value.totalAmount,
+        consecutiveDays: res.data.continue_days || stats.value.consecutiveDays,
+        currentReward: stats.value.currentReward
       }
     }
   } catch (error) {

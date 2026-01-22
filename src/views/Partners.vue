@@ -1,6 +1,21 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import MainLayout from '@/components/layout/MainLayout.vue'
+import { getWebConfig } from '@/api/home'
+import type { webConfig } from '@/types/index.type'
+
+// System config
+const sysConfig = ref<webConfig | null>(null)
+
+onMounted(() => {
+  getWebConfig().then(res => {
+    if (res.code === 200 && res.data) {
+      sysConfig.value = res.data
+    }
+  }).catch(err => {
+    console.error('获取系统配置失败:', err)
+  })
+})
 
 // 合作商列表数据
 const partners = ref([
@@ -44,11 +59,11 @@ const openQQ = (qq: string) => {
                 <div class="layui-colla-item">
                   <h2 class="layui-colla-title">
                     鼎丰28客服<i class="icon-smile">☺</i>
-                    <a href="https://wpa.qq.com/msgrd?v=3&uin=228711&site=qq&menu=yes"
+                    <a :href="`https://wpa.qq.com/msgrd?v=3&uin=${sysConfig?.connet_qq || '228711'}&site=qq&menu=yes`"
                        class="layui-btn layui-btn-sm layui-btn-primary"
                        title="认准官方QQ"
                        target="_blank">
-                      <i class="icon-qq">Q</i>228711
+                      <i class="icon-qq">Q</i>{{ sysConfig?.connet_qq || '228711' }}
                     </a>
                     <a href="javascript:;" class="layui-btn layui-btn-sm layui-btn-disabled" title="认准官方微信">
                       <i class="icon-wechat">微</i>微信维护中

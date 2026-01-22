@@ -2,13 +2,18 @@
 import { computed, ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useConfigStore } from '@/stores/config'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const configStore = useConfigStore()
 
 const isLogin = computed(() => authStore.isLogin)
 const customer = computed(() => authStore.currentCustomer)
+
+// System config from store
+const sysConfig = computed(() => configStore.sysConfig)
 
 // Game count digits - start from 0, animate to target
 const gameCountDigits = ref(['0', '0', '0', '0', '0', '0'])
@@ -117,6 +122,14 @@ const updateDigits = (num: number) => {
 }
 
 onMounted(() => {
+  // 如果用户已登录，自动获取用户信息（包括余额）
+  if (authStore.isLogin && !authStore.currentCustomer) {
+    authStore.fetchCurrentCustomer()
+  }
+
+  // 获取系统配置（通过store统一管理，避免重复请求）
+  configStore.fetchConfig()
+
   // Animate from 0 to target number on page load
   let currentValue = 0
   const duration = 2000 // 2 seconds animation
@@ -167,7 +180,7 @@ onMounted(() => {
         <div class="right">
           <ul>
             <li class="phone">
-              <a href="javascript:void(0)"><img src="/phone.png" class="phone-icon"> 手机版</a>
+              <a :href="sysConfig?.h5_url || 'javascript:void(0)'" :target="sysConfig?.h5_url ? '_blank' : '_self'"><img src="/phone.png" class="phone-icon"> 手机版</a>
             </li>
             <li>|</li>
             <li><a href="javascript:void(0)" @click="openWelfareModal">领救济</a></li>

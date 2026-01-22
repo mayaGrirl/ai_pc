@@ -34,6 +34,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '活动详情' }
   },
   {
+    path: '/announcement/:id',
+    name: 'AnnouncementDetail',
+    component: () => import('@/views/AnnouncementDetail.vue'),
+    meta: { title: '公告详情' }
+  },
+  {
     path: '/shop',
     name: 'Shop',
     component: () => import('@/views/Shop.vue'),
@@ -62,6 +68,12 @@ const routes: RouteRecordRaw[] = [
     name: 'Ranking',
     component: () => import('@/views/Ranking.vue'),
     meta: { title: '排行榜' }
+  },
+  {
+    path: '/game/top',
+    name: 'GameTop',
+    component: () => import('@/views/GameTop.vue'),
+    meta: { title: '游戏排行榜' }
   },
   {
     path: '/login',

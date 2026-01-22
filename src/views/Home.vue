@@ -1,19 +1,25 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
+import { useConfigStore } from '@/stores/config'
 import MainLayout from '@/components/layout/MainLayout.vue'
-import { getBanners, getAnnouncements, indexGameHotNew } from '@/api/home'
+import { getBanners, getAnnouncements, indexGameHotNew, getHomePopup } from '@/api/home'
+import { withdrawalDynamics } from '@/api/customer'
+import { rankToday, rankYesterday } from '@/api/rank'
 import { httpConfigRKey } from '@/api/common'
 import SodiumEncryptor from '@/utils/sodium'
 import type { IndexDataItem, gameItem } from '@/types/index.type'
+import type { RankTodayField } from '@/types/rank.type'
 
 const { t, locale } = useI18n()
 const router = useRouter()
 const authStore = useAuthStore()
+const configStore = useConfigStore()
 
 const isLogin = computed(() => authStore.isLogin)
+const sysConfig = computed(() => configStore.sysConfig)
 const customer = computed(() => authStore.currentCustomer)
 
 // Data
@@ -35,36 +41,258 @@ const loginLoading = ref(false)
 const loginError = ref('')
 const publicKey = ref('')
 
-// Withdrawal dynamics mock data
-const withdrawRecords = ref([
-  { user: '138****5678', amount: 1200 },
-  { user: '159****3456', amount: 3500 },
-  { user: '186****7890', amount: 800 },
-  { user: '135****2345', amount: 5000 }
-])
+// Popup announcement
+const showPopup = ref(false)
+const popupAnnouncement = ref<IndexDataItem | null>(null)
 
-// Rankings mock data
-const todayRankings = ref([
-  { rank: 1, user: '开***刀', amount: 217585458 },
-  { rank: 2, user: '黄***宇', amount: 141503409 },
-  { rank: 3, user: '冰***璃', amount: 205871742 },
-  { rank: 4, user: '夜***子', amount: 150764744 },
-  { rank: 5, user: '王***明', amount: 102752714 },
-  { rank: 6, user: '李***华', amount: 148399302 },
-  { rank: 7, user: '张***飞', amount: 98765432 }
-])
+// Withdrawal dynamics
+interface WithdrawRecord {
+  user: string
+  amount: number
+}
+const withdrawRecords = ref<WithdrawRecord[]>([])
+const withdrawScrollTop = ref(0)
+let withdrawScrollTimer: ReturnType<typeof setInterval> | null = null
 
-const yesterdayRankings = ref([
-  { rank: 1, user: '星***辰', amount: 198765432 },
-  { rank: 2, user: '月***华', amount: 156789012 },
-  { rank: 3, user: '风***云', amount: 134567890 },
-  { rank: 4, user: '雪***梅', amount: 123456789 },
-  { rank: 5, user: '花***雨', amount: 112345678 },
-  { rank: 6, user: '梦***蝶', amount: 101234567 },
-  { rank: 7, user: '云***烟', amount: 90123456 }
-])
+// 生成随机手机号（隐藏中间四位）
+const generateRandomPhone = () => {
+  const prefixes = ['138', '139', '158', '159', '186', '187', '135', '136', '177', '178']
+  const prefix = prefixes[Math.floor(Math.random() * prefixes.length)]
+  const suffix = String(Math.floor(Math.random() * 10000)).padStart(4, '0')
+  return `${prefix}****${suffix}`
+}
 
+// 生成随机提现金额
+const generateRandomAmount = () => {
+  const amounts = [500, 800, 1000, 1200, 1500, 2000, 2500, 3000, 3500, 5000, 8000, 10000]
+  return amounts[Math.floor(Math.random() * amounts.length)]
+}
+
+// 生成假数据
+const generateFakeRecords = (count: number): WithdrawRecord[] => {
+  const fakeRecords: WithdrawRecord[] = []
+  for (let i = 0; i < count; i++) {
+    fakeRecords.push({
+      user: generateRandomPhone(),
+      amount: generateRandomAmount()
+    })
+  }
+  return fakeRecords
+}
+
+// 获取提现动态数据
+const fetchWithdrawRecords = async () => {
+  try {
+    const res = await withdrawalDynamics(10)
+    let records: WithdrawRecord[] = []
+
+    if (res.code === 200 && res.data && res.data.length > 0) {
+      // 转换API数据格式
+      records = res.data.map(item => ({
+        user: item.mobile || generateRandomPhone(),
+        amount: Math.abs(item.deposit || 0)
+      }))
+    }
+
+    // 如果数据不足10条，补充假数据
+    if (records.length < 10) {
+      const fakeCount = 10 - records.length
+      const fakeRecords = generateFakeRecords(fakeCount)
+      records = [...records, ...fakeRecords]
+    }
+
+    // 打乱顺序
+    records = records.sort(() => Math.random() - 0.5)
+
+    withdrawRecords.value = records
+  } catch (error) {
+    console.error('获取提现动态失败:', error)
+    // 失败时使用全部假数据
+    withdrawRecords.value = generateFakeRecords(10)
+  }
+}
+
+// 开始滚动动画
+const startWithdrawScroll = () => {
+  if (withdrawScrollTimer) return
+
+  withdrawScrollTimer = setInterval(() => {
+    const itemHeight = 41 // 每条记录的高度
+    const totalHeight = withdrawRecords.value.length * itemHeight
+
+    withdrawScrollTop.value += 1
+
+    // 当滚动到一半时，重置回顶部实现无缝循环
+    if (withdrawScrollTop.value >= totalHeight / 2) {
+      withdrawScrollTop.value = 0
+    }
+  }, 50)
+}
+
+// 停止滚动
+const stopWithdrawScroll = () => {
+  if (withdrawScrollTimer) {
+    clearInterval(withdrawScrollTimer)
+    withdrawScrollTimer = null
+  }
+}
+
+// Rankings data
+interface RankingItem {
+  rank: number
+  user: string
+  amount: number
+}
+const todayRankings = ref<RankingItem[]>([])
+const yesterdayRankings = ref<RankingItem[]>([])
 const activeRankingTab = ref('today')
+const rankingPage = ref(1)
+const RANKING_PAGE_SIZE = 7
+const RANKING_TOTAL = 14
+
+// 当前显示的排行榜数据（分页后）
+const currentRankings = computed(() => {
+  const data = activeRankingTab.value === 'today' ? todayRankings.value : yesterdayRankings.value
+  const start = (rankingPage.value - 1) * RANKING_PAGE_SIZE
+  const end = start + RANKING_PAGE_SIZE
+  return data.slice(start, end)
+})
+
+// 总页数
+const totalRankingPages = computed(() => {
+  const data = activeRankingTab.value === 'today' ? todayRankings.value : yesterdayRankings.value
+  return Math.ceil(data.length / RANKING_PAGE_SIZE)
+})
+
+// 生成随机昵称（网络昵称风格）
+const generateRandomNickname = () => {
+  const nicknames = [
+    '大门', '小飞侠', '夜猫子', '追风少年', '逍遥客',
+    '独行侠', '神算子', '财神爷', '幸运星', '金手指',
+    '老司机', '淡定哥', '稳赢王', '发财树', '聚宝盆',
+    '福星高照', '一路发', '好运来', '招财猫', '摇钱树',
+    '常胜将军', '百战百胜', '一夜暴富', '步步高升', '财源滚滚',
+    '潇洒哥', '快乐王', '无敌手', '横扫千军', '所向披靡'
+  ]
+  const suffixes = [
+    '', '', '', // 有些不加后缀
+    String(Math.floor(Math.random() * 9000) + 1000), // 4位数字
+    String(Math.floor(Math.random() * 900) + 100), // 3位数字
+    '。', '~', '！'
+  ]
+  const nickname = nicknames[Math.floor(Math.random() * nicknames.length)]
+  const suffix = suffixes[Math.floor(Math.random() * suffixes.length)]
+  return nickname + suffix
+}
+
+// 生成随机金额
+const generateRandomRankAmount = () => {
+  return Math.floor(Math.random() * 200000000) + 50000000
+}
+
+// 生成假数据
+const generateFakeRankings = (count: number, startRank: number): RankingItem[] => {
+  const fakeData: RankingItem[] = []
+  for (let i = 0; i < count; i++) {
+    fakeData.push({
+      rank: startRank + i,
+      user: generateRandomNickname(),
+      amount: generateRandomRankAmount()
+    })
+  }
+  // 按金额降序排列
+  return fakeData.sort((a, b) => b.amount - a.amount)
+}
+
+// 转换API数据为显示格式
+const convertRankData = (data: RankTodayField[]): RankingItem[] => {
+  return data.map((item, index) => ({
+    rank: index + 1,
+    user: item.member_field?.nickname || item.member?.user || generateRandomNickname(),
+    amount: item.profit || 0
+  }))
+}
+
+// 获取排行榜数据
+const fetchRankings = async () => {
+  try {
+    const [todayRes, yesterdayRes] = await Promise.all([
+      rankToday(),
+      rankYesterday()
+    ])
+
+    // 处理今日排行榜
+    if (todayRes.code === 200 && todayRes.data) {
+      let todayData = convertRankData(todayRes.data)
+      // 不足14条则补充假数据
+      if (todayData.length < RANKING_TOTAL) {
+        const fakeCount = RANKING_TOTAL - todayData.length
+        const fakeData = generateFakeRankings(fakeCount, todayData.length + 1)
+        todayData = [...todayData, ...fakeData]
+      }
+      // 重新排序并设置排名
+      todayData.sort((a, b) => b.amount - a.amount)
+      todayData = todayData.slice(0, RANKING_TOTAL).map((item, index) => ({
+        ...item,
+        rank: index + 1
+      }))
+      todayRankings.value = todayData
+    } else {
+      // API失败时使用全部假数据
+      todayRankings.value = generateFakeRankings(RANKING_TOTAL, 1)
+        .map((item, index) => ({ ...item, rank: index + 1 }))
+    }
+
+    // 处理昨日排行榜
+    if (yesterdayRes.code === 200 && yesterdayRes.data) {
+      let yesterdayData = convertRankData(yesterdayRes.data)
+      // 不足14条则补充假数据
+      if (yesterdayData.length < RANKING_TOTAL) {
+        const fakeCount = RANKING_TOTAL - yesterdayData.length
+        const fakeData = generateFakeRankings(fakeCount, yesterdayData.length + 1)
+        yesterdayData = [...yesterdayData, ...fakeData]
+      }
+      // 重新排序并设置排名
+      yesterdayData.sort((a, b) => b.amount - a.amount)
+      yesterdayData = yesterdayData.slice(0, RANKING_TOTAL).map((item, index) => ({
+        ...item,
+        rank: index + 1
+      }))
+      yesterdayRankings.value = yesterdayData
+    } else {
+      // API失败时使用全部假数据
+      yesterdayRankings.value = generateFakeRankings(RANKING_TOTAL, 1)
+        .map((item, index) => ({ ...item, rank: index + 1 }))
+    }
+  } catch (error) {
+    console.error('获取排行榜数据失败:', error)
+    // 失败时使用假数据
+    todayRankings.value = generateFakeRankings(RANKING_TOTAL, 1)
+      .map((item, index) => ({ ...item, rank: index + 1 }))
+    yesterdayRankings.value = generateFakeRankings(RANKING_TOTAL, 1)
+      .map((item, index) => ({ ...item, rank: index + 1 }))
+  }
+}
+
+// 切换排行榜Tab
+const switchRankingTab = (tab: 'today' | 'yesterday') => {
+  activeRankingTab.value = tab
+  rankingPage.value = 1 // 切换Tab时重置页码
+}
+
+// 上一页
+const prevRankingPage = () => {
+  if (rankingPage.value > 1) {
+    rankingPage.value--
+  }
+}
+
+// 下一页
+const nextRankingPage = () => {
+  if (rankingPage.value < totalRankingPages.value) {
+    rankingPage.value++
+  }
+}
 
 // Shop tabs data
 const activeShopTab = ref(0)
@@ -109,18 +337,6 @@ const shopTabs = ref([
 
 const currentShopTab = computed(() => shopTabs.value[activeShopTab.value])
 
-// Game images
-const gameImages = ref([
-  { id: 1, name: '加拿大28', img: '/index/01.png' },
-  { id: 2, name: '宾果28', img: '/index/02.png' },
-  { id: 3, name: '幸运28', img: '/index/03.png' },
-  { id: 4, name: '美国28', img: '/index/04.png' },
-  { id: 5, name: '宾果10', img: '/index/05.png' },
-  { id: 6, name: '加拿大36', img: '/index/06.png' },
-  { id: 7, name: '加拿大2.1', img: '/index/07.png' },
-  { id: 8, name: '加拿大2.8', img: '/index/08.png' }
-])
-
 // Get localized title
 const getLocalizedTitle = (item: IndexDataItem | gameItem) => {
   if ('lang_title' in item && item.lang_title && typeof item.lang_title === 'object' && !Array.isArray(item.lang_title)) {
@@ -136,7 +352,15 @@ const getLocalizedTitle = (item: IndexDataItem | gameItem) => {
 
 // Banner carousel
 const nextBanner = () => {
-  currentBanner.value = (currentBanner.value + 1) % 5
+  if (banners.value.length > 0) {
+    currentBanner.value = (currentBanner.value + 1) % banners.value.length
+  }
+}
+
+const prevBanner = () => {
+  if (banners.value.length > 0) {
+    currentBanner.value = (currentBanner.value - 1 + banners.value.length) % banners.value.length
+  }
 }
 
 // Login handler
@@ -197,6 +421,32 @@ onMounted(async () => {
     console.error('Failed to get public key:', error)
   })
 
+  // 获取系统配置（通过store统一管理，避免重复请求）
+  configStore.fetchConfig()
+
+  // 获取首页弹框公告
+  getHomePopup().then(res => {
+    if (res.code === 200 && res.data?.length > 0) {
+      const popup = res.data[0]
+      popupAnnouncement.value = popup
+      const popupKey = `home_popup_${popup.id}`
+      if (!sessionStorage.getItem(popupKey)) {
+        showPopup.value = true
+        sessionStorage.setItem(popupKey, 'true')
+      }
+    }
+  }).catch(error => {
+    console.error('Failed to get home popup:', error)
+  })
+
+  // 获取提现动态数据
+  fetchWithdrawRecords().then(() => {
+    startWithdrawScroll()
+  })
+
+  // 获取排行榜数据
+  fetchRankings()
+
   try {
     const [bannerRes, announcementRes, hotRes] = await Promise.all([
       getBanners(),
@@ -215,8 +465,10 @@ onMounted(async () => {
       newGames.value = hotRes.data.new || []
     }
 
-    // Auto-play banner
-    setInterval(nextBanner, 5000)
+    // Auto-play banner (only if banners exist)
+    if (banners.value.length > 0) {
+      setInterval(nextBanner, 5000)
+    }
 
     // Simulate game count growth
     setInterval(() => {
@@ -229,8 +481,23 @@ onMounted(async () => {
   }
 })
 
+// Cleanup
+onUnmounted(() => {
+  stopWithdrawScroll()
+})
+
 const goToGame = (gameId: number) => {
-  router.push(`/games/${gameId}`)
+  router.push({ path: '/games', query: { lottery: String(gameId) } })
+}
+
+// 获取游戏图片（优先使用game_logo，否则使用默认图片）
+const getGameImage = (game: gameItem, index: number) => {
+  if (game.game_logo) {
+    return game.game_logo
+  }
+  // 默认图片 01-08.png
+  const defaultIndex = (index % 8) + 1
+  return `/index/0${defaultIndex}.png`
 }
 
 const formatNumber = (num: number) => {
@@ -244,26 +511,40 @@ const handleLogout = () => {
 const scrollToTop = () => {
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
+
+// Close popup
+const closePopup = () => {
+  showPopup.value = false
+}
 </script>
 
 <template>
   <MainLayout>
     <!-- Banner Section -->
     <div class="bannerbox">
-      <div class="hd">
+      <div class="hd" v-if="banners.length > 1">
         <ul>
-          <li v-for="(_, index) in 5" :key="index" :class="{ on: currentBanner === index }" @click="currentBanner = index"></li>
+          <li v-for="(_, index) in banners" :key="index" :class="{ on: currentBanner === index }" @click="currentBanner = index"></li>
         </ul>
       </div>
       <div class="bd">
         <ul>
-          <li v-for="(_, index) in 5" :key="index" :style="{ display: currentBanner === index ? 'list-item' : 'none' }">
-            <a href="#"><img :src="`/index/20230404${index + 1}.png`" width="1920" height="384"></a>
+          <!-- API轮播图 -->
+          <li v-for="(banner, index) in banners" :key="banner.id" :style="{ display: currentBanner === index ? 'list-item' : 'none' }">
+            <a :href="banner.jump_url || 'javascript:void(0)'" :target="banner.jump_url ? '_blank' : '_self'">
+              <img :src="banner.pc_pic || banner.pic" :alt="banner.title" width="1920" height="384">
+            </a>
+          </li>
+          <!-- 无数据时的默认显示 -->
+          <li v-if="banners.length === 0" style="display: list-item;">
+            <a href="javascript:void(0)">
+              <img src="/index/202304041.png" alt="默认轮播图" width="1920" height="384">
+            </a>
           </li>
         </ul>
       </div>
-      <a class="prev" href="javascript:void(0)" @click="currentBanner = (currentBanner - 1 + 5) % 5"></a>
-      <a class="next" href="javascript:void(0)" @click="currentBanner = (currentBanner + 1) % 5"></a>
+      <a v-if="banners.length > 1" class="prev" href="javascript:void(0)" @click="prevBanner"></a>
+      <a v-if="banners.length > 1" class="next" href="javascript:void(0)" @click="nextBanner"></a>
 
       <!-- Login Box / User Info -->
       <div class="fucen_box">
@@ -317,8 +598,8 @@ const scrollToTop = () => {
           <div class="anniu_box">
             <router-link class="button" to="/user/checkin" style="cursor: pointer">每日签到</router-link>
           </div>
-          <a href="http://wpa.qq.com/msgrd?v=3&uin=228711&site=qq&menu=yes" target="_blank" class="qq-banner">
-            <img src="/index_qq.png" width="335" height="75">
+          <a :href="`http://wpa.qq.com/msgrd?v=3&uin=${sysConfig?.connet_qq || '228711'}&site=qq&menu=yes`" target="_blank" class="qq-banner">
+            <img src="/index_qq.png" alt="QQ客服" width="335" height="75">
           </a>
         </template>
       </div>
@@ -340,10 +621,10 @@ const scrollToTop = () => {
           </div>
           <div class="list">
             <ul>
-              <li v-for="game in gameImages.slice(0, 4)" :key="game.id" @click="goToGame(game.id)">
+              <li v-for="(game, index) in newGames.slice(0, 4)" :key="game.id" @click="goToGame(game.id)">
                 <i class="game-type type"></i>
                 <div class="img">
-                  <img :src="game.img" :alt="game.name">
+                  <img :src="getGameImage(game, index)" :alt="game.name">
                   <div class="hover">
                     <a class="link_btn" href="javascript:void(0)"></a>
                     <a class="button" href="javascript:void(0)">立即试玩</a>
@@ -365,10 +646,10 @@ const scrollToTop = () => {
           </div>
           <ul class="news_list">
             <li v-for="notice in announcements.slice(0, 5)" :key="notice.id">
-              <a href="javascript:void(0)"><b></b>{{ getLocalizedTitle(notice) }}</a>
+              <router-link :to="`/announcement/${notice.id}`"><b></b>{{ getLocalizedTitle(notice) }}</router-link>
             </li>
             <li v-if="announcements.length === 0">
-              <a href="javascript:void(0)"><b></b>暂无公告</a>
+              <span class="empty-notice"><b></b>暂无公告</span>
             </li>
           </ul>
         </div>
@@ -378,11 +659,24 @@ const scrollToTop = () => {
           <div class="top">
             <h2>提现动态</h2>
           </div>
-          <div class="cash_list">
-            <div class="bd">
-              <ul class="infoList">
-                <li v-for="(record, index) in withdrawRecords" :key="index">
-                  <p><b><a href="#">{{ record.user }}</a></b> 提现了</p>
+          <div
+            class="cash_list"
+            @mouseenter="stopWithdrawScroll"
+            @mouseleave="startWithdrawScroll"
+          >
+            <div class="bd scroll-container">
+              <ul
+                class="infoList"
+                :style="{ transform: `translateY(-${withdrawScrollTop}px)` }"
+              >
+                <!-- 原始数据 -->
+                <li v-for="(record, index) in withdrawRecords" :key="`a-${index}`">
+                  <p><b><a href="javascript:void(0)">{{ record.user }}</a></b> 提现了</p>
+                  <span>{{ formatNumber(record.amount) }}</span>
+                </li>
+                <!-- 复制一份用于无缝滚动 -->
+                <li v-for="(record, index) in withdrawRecords" :key="`b-${index}`">
+                  <p><b><a href="javascript:void(0)">{{ record.user }}</a></b> 提现了</p>
                   <span>{{ formatNumber(record.amount) }}</span>
                 </li>
               </ul>
@@ -398,10 +692,10 @@ const scrollToTop = () => {
           </div>
           <div class="list">
             <ul>
-              <li v-for="game in gameImages.slice(4, 8)" :key="game.id" @click="goToGame(game.id)">
+              <li v-for="(game, index) in hotGames.slice(0, 4)" :key="game.id" @click="goToGame(game.id)">
                 <i class="game-type type"></i>
                 <div class="img">
-                  <img :src="game.img" :alt="game.name">
+                  <img :src="getGameImage(game, index + 4)" :alt="game.name">
                   <div class="hover">
                     <a class="link_btn" href="javascript:void(0)"></a>
                     <a class="button" href="javascript:void(0)">立即试玩</a>
@@ -418,29 +712,45 @@ const scrollToTop = () => {
         <!-- Daily Rankings -->
         <div class="index_box day_box">
           <ul class="menu">
-            <li :class="{ list: activeRankingTab === 'today' }" @click="activeRankingTab = 'today'">
+            <li :class="{ list: activeRankingTab === 'today' }" @click="switchRankingTab('today')">
               <a href="javascript:void(0)">今日排行榜</a>
             </li>
-            <li :class="{ list: activeRankingTab === 'yesterday' }" @click="activeRankingTab = 'yesterday'">
+            <li :class="{ list: activeRankingTab === 'yesterday' }" @click="switchRankingTab('yesterday')">
               <a href="javascript:void(0)">昨日排行榜</a>
             </li>
           </ul>
           <ul class="day_list">
             <li class="top">
-              <span style="width: 55px; display: inline-block;">排名</span>
-              <span style="width: 95px; display: inline-block;">昵称</span>
-              <span style="width: 150px; display: inline-block;">乐豆</span>
+              <dd class="col-rank">排名</dd>
+              <dd class="col-name">昵称</dd>
+              <dd class="col-score">乐豆</dd>
             </li>
-            <li v-for="item in (activeRankingTab === 'today' ? todayRankings : yesterdayRankings)" :key="item.rank">
-              <span style="width: 55px; display: inline-block;">
-                <span :class="item.rank === 1 ? 'one' : item.rank === 2 ? 'two' : item.rank === 3 ? 'three' : 'end'">
-                  {{ item.rank > 3 ? item.rank : '' }}
-                </span>
-              </span>
-              <span style="width: 95px; display: inline-block;"><a href="#">{{ item.user }}</a></span>
-              <span style="width: 150px; display: inline-block; color: #f03736; font-weight: bold;">{{ formatNumber(item.amount) }}</span>
+            <li v-for="item in currentRankings" :key="`rank-${activeRankingTab}-${item.rank}`" class="rank-row">
+              <dd class="col-rank">
+                <span
+                  :class="['rank-icon', item.rank === 1 ? 'one' : item.rank === 2 ? 'two' : item.rank === 3 ? 'three' : 'end']"
+                >{{ item.rank > 3 ? item.rank : '' }}</span>
+              </dd>
+              <dd class="col-name"><a href="javascript:void(0)">{{ item.user }}</a></dd>
+              <dd class="col-score">{{ formatNumber(item.amount) }}</dd>
             </li>
           </ul>
+          <!-- Pagination -->
+          <div class="ranking-pagination">
+            <a
+              href="javascript:void(0)"
+              class="page-btn prev"
+              :class="{ disabled: rankingPage === 1 }"
+              @click="prevRankingPage"
+            >上一页</a>
+            <span class="page-info">{{ rankingPage }}/{{ totalRankingPages }}</span>
+            <a
+              href="javascript:void(0)"
+              class="page-btn next"
+              :class="{ disabled: rankingPage === totalRankingPages }"
+              @click="nextRankingPage"
+            >下一页</a>
+          </div>
         </div>
 
         <!-- Game Shop -->
@@ -511,7 +821,24 @@ const scrollToTop = () => {
         </div>
       </div>
     </div>
-  </MainLayout>
+
+    </MainLayout>
+
+  <!-- 首页弹框公告 -->
+  <div v-if="showPopup && popupAnnouncement" class="home-popup-dialog">
+    <div class="popup-dialog-box">
+      <div class="popup-dialog-content">
+        <h1>{{ popupAnnouncement.title }}</h1>
+        <div class="popup-dialog-body" v-html="popupAnnouncement.content"></div>
+        <a href="javascript:;" class="popup-close-btn" @click="closePopup">
+          <svg viewBox="0 0 24 24">
+            <path d="M19 6.41l-1.41-1.41-5.59 5.59-5.59-5.59-1.41 1.41 5.59 5.59-5.59 5.59 1.41 1.41 5.59-5.59 5.59 5.59 1.41-1.41-5.59-5.59z"/>
+            <path d="M0 0h24v24h-24z" fill="none"/>
+          </svg>
+        </a>
+      </div>
+    </div>
+  </div>
 </template>
 
 <style scoped>
@@ -877,18 +1204,20 @@ const scrollToTop = () => {
 }
 
 .bannerbox .fucen_box .qq-banner {
-  height: 80px;
+  height: 75px;
   overflow: hidden;
   width: 335px;
-  background: #ececec;
-  display: inline-block;
+  display: block;
   position: absolute;
   margin-left: -23px;
+  bottom: 0;
+  text-decoration: none;
 }
 
 .bannerbox .fucen_box .qq-banner img {
-  position: absolute;
-  left: 0;
+  display: block;
+  width: 335px;
+  height: 75px;
 }
 
 /* Main Content */
@@ -1153,6 +1482,28 @@ const scrollToTop = () => {
   background: #f03736;
 }
 
+.index_center .center_box .news_box .news_list li .empty-notice {
+  width: 290px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+  line-height: 35px;
+  height: 35px;
+  color: #999;
+  font-size: 13px;
+}
+
+.index_center .center_box .news_box .news_list li .empty-notice b {
+  width: 6px;
+  height: 6px;
+  border-radius: 10px;
+  display: inline-block;
+  background: #ccc;
+  margin: 16px 5px auto auto;
+  float: left;
+}
+
 /* Cash Box */
 .index_center .center_box .cash_box .cash_list {
   width: 290px;
@@ -1161,10 +1512,16 @@ const scrollToTop = () => {
   margin: 5px auto 15px auto;
 }
 
+.index_center .center_box .cash_box .cash_list .scroll-container {
+  height: 164px;
+  overflow: hidden;
+}
+
 .index_center .center_box .cash_box .cash_list .infoList {
   list-style: none;
   padding: 0;
   margin: 0;
+  will-change: transform;
 }
 
 .index_center .center_box .cash_box .cash_list .infoList li {
@@ -1203,7 +1560,7 @@ const scrollToTop = () => {
 /* Day Box - Rankings */
 .index_center .center_box .day_box {
   width: 320px;
-  height: 466px;
+  height: auto;
   overflow: hidden;
   margin-top: 20px;
 }
@@ -1243,75 +1600,106 @@ const scrollToTop = () => {
 }
 
 .index_center .center_box .day_box ul.day_list {
-  width: 320px;
-  height: 357px;
+  width: 300px;
+  min-height: 349px;
   overflow: hidden;
-  margin: 6px auto auto auto;
+  margin: 0 auto;
   list-style: none;
   padding: 0;
 }
 
 .index_center .center_box .day_box ul.day_list li {
   width: 300px;
-  height: 45px;
-  line-height: 45px;
-  border-bottom: 1px dashed #ebebeb;
+  height: 50px;
+  line-height: 50px;
+  border-bottom: 1px solid #f0f0f0;
   margin: 0 auto;
   font-size: 13px;
-  float: left;
+  display: flex;
+  align-items: center;
 }
 
 .index_center .center_box .day_box ul.day_list li.top {
-  background: #f0f0f0;
+  background: #f9f9f9;
   font-size: 13px;
-  color: #333;
-  height: 34px;
-  line-height: 34px;
+  color: #666;
+  height: 40px;
+  line-height: 40px;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  align-items: center;
   padding: 0;
   width: 300px;
 }
 
+/* Ranking columns */
 .index_center .center_box .day_box ul.day_list li dd {
   margin: 0;
-  display: block;
-  text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  float: left;
   box-sizing: border-box;
 }
 
-.index_center .center_box .day_box ul.day_list li dd span.end {
-  width: 16px;
-  height: 16px;
-  color: #fff;
+.index_center .center_box .day_box ul.day_list li dd.col-rank {
+  width: 60px;
   text-align: center;
-  line-height: 16px;
-  background: #bababa;
-  display: inline-block;
-  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.index_center .center_box .day_box ul.day_list li dd span.one {
-  width: 19px;
-  height: 26px;
+.index_center .center_box .day_box ul.day_list li dd.col-name {
+  width: 100px;
+  text-align: left;
+  padding-left: 5px;
+}
+
+.index_center .center_box .day_box ul.day_list li dd.col-score {
+  flex: 1;
+  text-align: right;
+  padding-right: 10px;
+  color: #f03736;
+  font-weight: bold;
+}
+
+/* Rank icons */
+.index_center .center_box .day_box ul.day_list li .rank-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.index_center .center_box .day_box ul.day_list li .rank-icon.end {
+  width: 20px;
+  height: 20px;
+  color: #666;
+  text-align: center;
+  line-height: 20px;
+  background: #f0f0f0;
+  border-radius: 2px;
+  font-size: 12px;
+}
+
+.index_center .center_box .day_box ul.day_list li .rank-icon.one {
+  width: 24px;
+  height: 30px;
   background: url("/yxsw_games_list.png") 0 0 no-repeat;
-  display: inline-block;
+  background-size: 72px 30px;
 }
 
-.index_center .center_box .day_box ul.day_list li dd span.two {
-  width: 19px;
-  height: 26px;
-  background: url("/yxsw_games_list.png") -22px 0 no-repeat;
-  display: inline-block;
+.index_center .center_box .day_box ul.day_list li .rank-icon.two {
+  width: 24px;
+  height: 30px;
+  background: url("/yxsw_games_list.png") -24px 0 no-repeat;
+  background-size: 72px 30px;
 }
 
-.index_center .center_box .day_box ul.day_list li dd span.three {
-  width: 19px;
-  height: 26px;
-  background: url("/yxsw_games_list.png") -44px 0 no-repeat;
-  display: inline-block;
+.index_center .center_box .day_box ul.day_list li .rank-icon.three {
+  width: 24px;
+  height: 30px;
+  background: url("/yxsw_games_list.png") -48px 0 no-repeat;
+  background-size: 72px 30px;
 }
 
 .index_center .center_box .day_box ul.day_list li dd a {
@@ -1319,7 +1707,44 @@ const scrollToTop = () => {
 }
 
 .index_center .center_box .day_box ul.day_list li dd a:hover {
-  text-decoration: underline;
+  color: #f03736;
+}
+
+/* Ranking Pagination */
+.index_center .center_box .day_box .ranking-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 15px 0;
+  gap: 20px;
+  margin-top: 10px;
+}
+
+.index_center .center_box .day_box .ranking-pagination .page-btn {
+  color: #666;
+  font-size: 13px;
+  text-decoration: none;
+  padding: 8px 20px;
+  border: 1px solid #ddd;
+  background: #fff;
+  transition: all 0.3s;
+}
+
+.index_center .center_box .day_box .ranking-pagination .page-btn:hover:not(.disabled) {
+  color: #f03736;
+  border-color: #f03736;
+}
+
+.index_center .center_box .day_box .ranking-pagination .page-btn.disabled {
+  color: #ccc;
+  border-color: #eee;
+  background: #fafafa;
+  cursor: not-allowed;
+}
+
+.index_center .center_box .day_box .ranking-pagination .page-info {
+  color: #999;
+  font-size: 13px;
 }
 
 /* Prize Box - Shop */
@@ -1614,5 +2039,205 @@ a {
 
 a:hover {
   text-decoration: none;
+}
+
+/* Popup Announcement Dialog */
+.dialog {
+  will-change: visibility, opacity;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  z-index: 1000;
+  visibility: hidden;
+  opacity: 0;
+  background: rgba(0, 0, 0, 0.5);
+  transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.dialog--active {
+  visibility: visible;
+  opacity: 1;
+}
+
+.dialog__dialog {
+  max-width: 600px;
+  width: 90%;
+  padding: 1.2rem;
+}
+
+.dialog__content {
+  will-change: transform, opacity;
+  position: relative;
+  padding: 2.4rem;
+  background: #fff;
+  background-clip: padding-box;
+  box-shadow: 0 12px 15px 0 rgba(0, 0, 0, 0.25);
+  opacity: 0;
+  transform: scale(0.9);
+  transition: all 0.25s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.dialog__content--active {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.dialog__content h1 {
+  margin: 0 0 20px 0;
+  font-size: 20px;
+  color: #333;
+  font-weight: bold;
+  padding-right: 40px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 15px;
+}
+
+.dialog__body {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #666;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.dialog__body :deep(p) {
+  margin: 0 0 10px 0;
+}
+
+.dialog__body :deep(img) {
+  max-width: 100%;
+  height: auto;
+}
+
+.dialog__body :deep(a) {
+  color: #f03736;
+}
+
+.dialog-close {
+  z-index: 1100;
+  cursor: pointer;
+  position: absolute;
+  top: 0;
+  right: 0;
+  margin: 1.2rem;
+  padding: 0.6rem;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 50%;
+  transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dialog-close svg {
+  width: 20px;
+  height: 20px;
+  fill: #fff;
+  pointer-events: none;
+  vertical-align: top;
+}
+
+.dialog-close:hover {
+  background: rgba(0, 0, 0, 0.6);
+}
+</style>
+
+<!-- 弹框公告样式 - 非scoped，因为Teleport渲染到body -->
+<style>
+.home-popup-dialog {
+  will-change: visibility, opacity;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.5);
+  transition: all 0.3s ease;
+}
+
+.home-popup-dialog .popup-dialog-box {
+  max-width: 600px;
+  width: 90%;
+  padding: 1.2rem;
+}
+
+.home-popup-dialog .popup-dialog-content {
+  position: relative;
+  padding: 2.4rem;
+  background: #fff;
+  background-clip: padding-box;
+  box-shadow: 0 12px 15px 0 rgba(0, 0, 0, 0.25);
+}
+
+.home-popup-dialog .popup-dialog-content h1 {
+  margin: 0 0 20px 0;
+  font-size: 20px;
+  color: #333;
+  font-weight: bold;
+  padding-right: 40px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 15px;
+}
+
+.home-popup-dialog .popup-dialog-body {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #666;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.home-popup-dialog .popup-dialog-body p {
+  margin: 0 0 10px 0;
+}
+
+.home-popup-dialog .popup-dialog-body img {
+  max-width: 100%;
+  height: auto;
+}
+
+.home-popup-dialog .popup-dialog-body a {
+  color: #f03736;
+}
+
+.home-popup-dialog .popup-close-btn {
+  z-index: 10;
+  cursor: pointer;
+  position: absolute;
+  top: 0;
+  right: 0;
+  margin: 1.2rem;
+  padding: 0.6rem;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.home-popup-dialog .popup-close-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: #fff;
+  pointer-events: none;
+  vertical-align: top;
+}
+
+.home-popup-dialog .popup-close-btn:hover {
+  background: rgba(0, 0, 0, 0.6);
 }
 </style>

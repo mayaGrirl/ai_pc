@@ -56,6 +56,7 @@ export interface gameItem {
   id: number;
   name?: string;
   logo?: string;
+  game_logo?: string;
   lang_name?: [];
   game_class?: number;
   is_hot?: number;
@@ -76,4 +77,5 @@ export interface webConfig {
   h5_url: string;
   pc_url: string;
   pic_url: string;
+  connet_qq?: string;
 }

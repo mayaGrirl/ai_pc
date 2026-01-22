@@ -1,22 +1,32 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import UserLayout from '@/components/layout/UserLayout.vue'
 import { useAuthStore } from '@/stores/auth'
+import { customerProfile, vipReceiveState, salaryWeeklyTotal, signStat } from '@/api/customer'
+import type { CustomerProfile, VipReceiveState, SalaryWekdayTotal, SignInStatisticsField } from '@/types/customer.type'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const customer = computed(() => authStore.currentCustomer)
+const isLogin = computed(() => authStore.isLogin)
 
-// User info
-const userInfo = ref({
+// API数据
+const profileData = ref<CustomerProfile | null>(null)
+const vipState = ref<VipReceiveState | null>(null)
+const weekSalaryData = ref<SalaryWekdayTotal | null>(null)
+const signStatData = ref<SignInStatisticsField | null>(null)
+const loading = ref(false)
+
+// User info (computed from API data)
+const userInfo = computed(() => ({
   todayRank: '500以外',
-  memberCard: '普通会员',
-  weekSalary: 0,
-  signedCount: 1200,
-  lastLoginAddress: '浙江省杭州市',
-  lastLoginTime: '2024年01月15日 14点30分25秒'
-})
+  memberCard: profileData.value?.customer?.vip_label || '普通会员',
+  weekSalary: weekSalaryData.value?.coin || 0,
+  signedCount: signStatData.value?.total_people || 0,
+  lastLoginAddress: profileData.value?.customer?.last_login_address || '-',
+  lastLoginTime: formatLoginTime(profileData.value?.customer?.last_login_time)
+}))
 
 // Daily first deposit rebate
 const firstDepositRebate = ref({
@@ -40,18 +50,72 @@ const lossRebate = ref({
   ]
 })
 
-// Beginner tasks
-const beginnerTasks = ref([
-  { name: '绑定邮箱', desc: '邮箱用于找回密码、领取救济金等，应尽快设置', completed: false, action: '马上绑定', path: '/user/profile' },
-  { name: '密码保护', desc: '用于验证你的身份，保护账户安全', completed: false, action: '马上设置', path: '/user/security' },
-  { name: '手机认证', desc: '用于验证你的身份，保护账户安全', completed: true, action: '已认证', path: '/user/verify' },
-  { name: '完善支付宝账号', desc: '更好的核实身份，保护账户安全', completed: false, action: '马上设置', path: '/user/profile' },
-  { name: '完善QQ号', desc: '更好的核实身份，保护账户安全', completed: false, action: '马上设置', path: '/user/profile' },
-  { name: '二级密码', desc: '设置二级密码，为了保障您的资金安全，建议定期修改二级密码！', completed: false, action: '设置', path: '/user/security' }
-])
+// Beginner tasks (computed from profile data)
+const beginnerTasks = computed(() => {
+  const profile = profileData.value
+  const memberField = profile?.member_field
+  const customerData = profile?.customer
 
-const formatNumber = (num: number) => {
+  return [
+    {
+      name: '绑定邮箱',
+      desc: '邮箱用于找回密码、领取救济金等，应尽快设置',
+      completed: !!customerData?.email,
+      action: customerData?.email ? '已绑定' : '马上绑定',
+      path: '/user/profile'
+    },
+    {
+      name: '密码保护',
+      desc: '用于验证你的身份，保护账户安全',
+      completed: !!customerData?.securitypass,
+      action: customerData?.securitypass ? '已设置' : '马上设置',
+      path: '/user/security'
+    },
+    {
+      name: '手机认证',
+      desc: '用于验证你的身份，保护账户安全',
+      completed: !!customerData?.mobile,
+      action: customerData?.mobile ? '已认证' : '马上认证',
+      path: '/user/verify'
+    },
+    {
+      name: '完善支付宝账号',
+      desc: '更好的核实身份，保护账户安全',
+      completed: !!memberField?.alipay,
+      action: memberField?.alipay ? '已设置' : '马上设置',
+      path: '/user/profile'
+    },
+    {
+      name: '完善QQ号',
+      desc: '更好的核实身份，保护账户安全',
+      completed: !!memberField?.qq,
+      action: memberField?.qq ? '已设置' : '马上设置',
+      path: '/user/profile'
+    },
+    {
+      name: '二级密码',
+      desc: '设置二级密码，为了保障您的资金安全，建议定期修改二级密码！',
+      completed: false,
+      action: '设置',
+      path: '/user/security'
+    }
+  ]
+})
+
+const formatNumber = (num: number | undefined) => {
   return num?.toLocaleString() || '0'
+}
+
+const formatLoginTime = (timestamp: number | undefined) => {
+  if (!timestamp) return '-'
+  const date = new Date(timestamp * 1000)
+  const year = date.getFullYear()
+  const month = (date.getMonth() + 1).toString().padStart(2, '0')
+  const day = date.getDate().toString().padStart(2, '0')
+  const hour = date.getHours().toString().padStart(2, '0')
+  const minute = date.getMinutes().toString().padStart(2, '0')
+  const second = date.getSeconds().toString().padStart(2, '0')
+  return `${year}年${month}月${day}日 ${hour}点${minute}分${second}秒`
 }
 
 const navigateTo = (path: string) => {
@@ -63,6 +127,50 @@ const calculateProgress = (current: number, target: number) => {
   const percent = (current / target) * 100
   return percent > 100 ? 100 : percent
 }
+
+// 加载用户数据
+const loadUserData = async () => {
+  if (!isLogin.value) return
+
+  loading.value = true
+  try {
+    // 并行请求所有数据
+    const [profileRes, vipRes, salaryRes, signRes] = await Promise.all([
+      customerProfile(),
+      vipReceiveState(),
+      salaryWeeklyTotal(),
+      signStat()
+    ])
+
+    if (profileRes.code === 200 && profileRes.data) {
+      profileData.value = profileRes.data
+    }
+    if (vipRes.code === 200 && vipRes.data) {
+      vipState.value = vipRes.data
+    }
+    if (salaryRes.code === 200 && salaryRes.data) {
+      weekSalaryData.value = salaryRes.data
+    }
+    if (signRes.code === 200 && signRes.data) {
+      signStatData.value = signRes.data
+    }
+  } catch (error) {
+    console.error('加载用户数据失败', error)
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  loadUserData()
+})
+
+// Watch for login state changes
+watch(isLogin, (newVal) => {
+  if (newVal) {
+    loadUserData()
+  }
+})
 </script>
 
 <template>

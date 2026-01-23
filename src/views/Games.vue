@@ -295,89 +295,45 @@ const extractResultFromFinalRes = (finalResRecord: string) => {
 // lotteryId: 当前选中的游戏ID，用于识别同一游戏下的所有玩法分组
 // gameName: 游戏名称，用于识别游戏类型
 const getGameRuleByGroupId = (groupId: number, groupInfo: string, rewardNum: number, gameType: number, gameName: string = '', lotteryId: number = 0) => {
-  // 根据reward_num确定计算方法
-  let calcMethod = 'lastDigit'
-  if (rewardNum === 16 || rewardNum === 11) {
-    calcMethod = 'mod6Plus1' // 余6加1
-  } else if (rewardNum === 10) {
-    calcMethod = 'lastDigitPlus1' // 取尾数加1
-  }
+  // ========== 完全基于 lotteryId 和 groupId 判断区位规则 ==========
 
-  // 检查是否是美国游戏（qlq系列）- 美国游戏的所有玩法分组使用相同的区位规则
-  const isQlqGame = gameName.includes('美国') || gameName.toLowerCase().includes('qlq')
-  // 检查是否是蛋蛋游戏 - 蛋蛋游戏的所有玩法分组使用相同的区位规则
-  // 支持：蛋蛋、dandan、dd、pc等命名，以及通过lotteryId判断
-  const lowerName = gameName.toLowerCase()
-  const isDandanGame = gameName.includes('蛋蛋') ||
-                       lowerName.includes('dandan') ||
-                       lowerName.includes('dd28') ||
-                       lowerName.includes('pc28') ||
-                       lowerName === 'pc' ||
-                       lowerName.startsWith('dd') ||
-                       lotteryId === 12  // 蛋蛋28的lottery_id
-
-  // ========== 蛋蛋28特殊处理（优先于rewardNum判断）==========
-  // 蛋蛋28: game_group_id = 18(和值), 19(号码形态), 20(龙虎豹), 21(大小单双)
-  // 区位规则: 一区(第1,2,3,4,5,6位) 二区(第7,8,9,10,11,12位) 三区(第13,14,15,16,17,18位)
-  if ([18, 19, 20, 21].includes(groupId)) {
+  // ========== 幸运28 (lotteryId=1) ==========
+  // group_id=1, 2: 无区位计算，直接使用3个号码
+  if (lotteryId === 1 || [1, 2].includes(groupId)) {
     return {
-      type: '28', zoneCount: 3, calcMethod: 'lastDigit',
-      zone1: [0, 1, 2, 3, 4, 5], zone2: [6, 7, 8, 9, 10, 11], zone3: [12, 13, 14, 15, 16, 17],
-      zone1Desc: '第1,2,3,4,5,6位', zone2Desc: '第7,8,9,10,11,12位', zone3Desc: '第13,14,15,16,17,18位'
+      type: 'lucky', zoneCount: 3, calcMethod: 'direct',
+      zone1: [0], zone2: [1], zone3: [2],
+      zone1Desc: '第1位', zone2Desc: '第2位', zone3Desc: '第3位'
     }
   }
 
-  // ========== 28类游戏规则 (reward_num=28) ==========
-  if (rewardNum === 28) {
-    // 蛋蛋28通过游戏名称判断
-    if (isDandanGame) {
-      return {
-        type: '28', zoneCount: 3, calcMethod: 'lastDigit',
-        zone1: [0, 1, 2, 3, 4, 5], zone2: [6, 7, 8, 9, 10, 11], zone3: [12, 13, 14, 15, 16, 17],
-        zone1Desc: '第1,2,3,4,5,6位', zone2Desc: '第7,8,9,10,11,12位', zone3Desc: '第13,14,15,16,17,18位'
-      }
+  // ========== 加拿大28 (lotteryId=2) ==========
+  // group_id=4: 前七取尾
+  if (groupId === 4) {
+    return {
+      type: '10', zoneCount: 1, calcMethod: 'lastDigitPlus1',
+      zone1: [0, 1, 2, 3, 4, 5, 6], zone2: [], zone3: [],
+      zone1Desc: '前7位', zone2Desc: '', zone3Desc: ''
     }
-    // 美国28（qlq28）: 所有玩法分组 - 一区(第1,6位) 二区(第2,4位) 三区(第3,5位)
-    if (isQlqGame) {
-      return {
-        type: '28', zoneCount: 3, calcMethod: 'lastDigit',
-        zone1: [0, 5], zone2: [1, 3], zone3: [2, 4],
-        zone1Desc: '第1,6位', zone2Desc: '第2,4位', zone3Desc: '第3,5位'
-      }
+  }
+  // group_id=5: 加拿大二取余
+  if (groupId === 5) {
+    return {
+      type: '11', zoneCount: 2, calcMethod: 'mod6Plus1',
+      zone1: [0, 3, 6, 9, 12, 15], zone2: [2, 5, 8, 11, 14, 17], zone3: [],
+      zone1Desc: '第1,4,7,10,13,16位', zone2Desc: '第3,6,9,12,15,18位', zone3Desc: ''
     }
-    // pc28: id=12 - 一区(第1,2,3,4,5,6位) 二区(第7,8,9,10,11,12位) 三区(第13,14,15,16,17,18位)
-    if (groupId === 12) {
-      return {
-        type: '28', zoneCount: 3, calcMethod: 'lastDigit',
-        zone1: [0, 1, 2, 3, 4, 5], zone2: [6, 7, 8, 9, 10, 11], zone3: [12, 13, 14, 15, 16, 17],
-        zone1Desc: '第1,2,3,4,5,6位', zone2Desc: '第7,8,9,10,11,12位', zone3Desc: '第13,14,15,16,17,18位'
-      }
+  }
+  // group_id=6: 加拿大三取余
+  if (groupId === 6) {
+    return {
+      type: '16', zoneCount: 3, calcMethod: 'mod6Plus1',
+      zone1: [0, 3, 6, 9, 12, 15], zone2: [1, 4, 7, 10, 13, 16], zone3: [2, 5, 8, 11, 14, 17],
+      zone1Desc: '第1,4,7,10,13,16位', zone2Desc: '第2,5,8,11,14,17位', zone3Desc: '第3,6,9,12,15,18位'
     }
-    // qlq28: id=49,53 - 一区(第1,6位) 二区(第2,4位) 三区(第3,5位)
-    if ([49, 53].includes(groupId)) {
-      return {
-        type: '28', zoneCount: 3, calcMethod: 'lastDigit',
-        zone1: [0, 5], zone2: [1, 3], zone3: [2, 4],
-        zone1Desc: '第1,6位', zone2Desc: '第2,4位', zone3Desc: '第3,5位'
-      }
-    }
-    // ca28gd1: id=37 - 一区(第5,8,11,14,17位) 二区(第6,9,12,15,18位) 三区(第7,10,13,16,19位)
-    if (groupId === 37) {
-      return {
-        type: '28', zoneCount: 3, calcMethod: 'lastDigit',
-        zone1: [4, 7, 10, 13, 16], zone2: [5, 8, 11, 14, 17], zone3: [6, 9, 12, 15, 18],
-        zone1Desc: '第5,8,11,14,17位', zone2Desc: '第6,9,12,15,18位', zone3Desc: '第7,10,13,16,19位'
-      }
-    }
-    // ca28gd2: id=42 - 一区(第2,5,8,11,14位) 二区(第3,6,9,12,15位) 三区(第4,7,10,13,16位)
-    if (groupId === 42) {
-      return {
-        type: '28', zoneCount: 3, calcMethod: 'lastDigit',
-        zone1: [1, 4, 7, 10, 13], zone2: [2, 5, 8, 11, 14], zone3: [3, 6, 9, 12, 15],
-        zone1Desc: '第2,5,8,11,14位', zone2Desc: '第3,6,9,12,15位', zone3Desc: '第4,7,10,13,16位'
-      }
-    }
-    // 默认28类: bj28/ca28/hg28/bg28等 - 一区(第2,5,8,11,14,17位) 二区(第3,6,9,12,15,18位) 三区(第4,7,10,13,16,19位)
+  }
+  // group_id=3, 7, 8, 9: 加拿大标准28点 (和值, 号码形态, 龙虎豹, 大小单双)
+  if (lotteryId === 2 || [3, 7, 8, 9].includes(groupId)) {
     return {
       type: '28', zoneCount: 3, calcMethod: 'lastDigit',
       zone1: [1, 4, 7, 10, 13, 16], zone2: [2, 5, 8, 11, 14, 17], zone3: [3, 6, 9, 12, 15, 18],
@@ -385,96 +341,88 @@ const getGameRuleByGroupId = (groupId: number, groupInfo: string, rewardNum: num
     }
   }
 
-  // ========== 16类游戏规则 (reward_num=16) ==========
-  if (rewardNum === 16) {
-    // 优先按游戏名称判断
-    // 美国16（qlq16）: 所有玩法分组 - 一区(第2,5位) 二区(第3,6位) 三区(第4,6位)
-    if (isQlqGame) {
-      return {
-        type: '16', zoneCount: 3, calcMethod: 'mod6Plus1',
-        zone1: [1, 4], zone2: [2, 5], zone3: [3, 5],
-        zone1Desc: '第2,5位', zone2Desc: '第3,6位', zone3Desc: '第4,6位'
-      }
-    }
-    // qlq16: id=50
-    if (groupId === 50) {
-      return {
-        type: '16', zoneCount: 3, calcMethod: 'mod6Plus1',
-        zone1: [1, 4], zone2: [2, 5], zone3: [3, 5],
-        zone1Desc: '第2,5位', zone2Desc: '第3,6位', zone3Desc: '第4,6位'
-      }
-    }
-    // id=9: 一区(第2,5,8,11,14,17位) 二区(第3,6,9,12,15,18位) 三区(第4,7,10,13,16,19位)
-    if (groupId === 9) {
-      return {
-        type: '16', zoneCount: 3, calcMethod: 'mod6Plus1',
-        zone1: [1, 4, 7, 10, 13, 16], zone2: [2, 5, 8, 11, 14, 17], zone3: [3, 6, 9, 12, 15, 18],
-        zone1Desc: '第2,5,8,11,14,17位', zone2Desc: '第3,6,9,12,15,18位', zone3Desc: '第4,7,10,13,16,19位'
-      }
-    }
-    // 默认16类: bj16/ca16/hg16/bg16 - 一区(第1,4,7,10,13,16位) 二区(第2,5,8,11,14,17位) 三区(第3,6,9,12,15,18位)
+  // ========== 韩国28 (lotteryId=3) ==========
+  // group_id=10, 11, 12, 13: 与加拿大标准28点相同
+  if (lotteryId === 3 || [10, 11, 12, 13].includes(groupId)) {
     return {
-      type: '16', zoneCount: 3, calcMethod: 'mod6Plus1',
-      zone1: [0, 3, 6, 9, 12, 15], zone2: [1, 4, 7, 10, 13, 16], zone3: [2, 5, 8, 11, 14, 17],
-      zone1Desc: '第1,4,7,10,13,16位', zone2Desc: '第2,5,8,11,14,17位', zone3Desc: '第3,6,9,12,15,18位'
+      type: '28', zoneCount: 3, calcMethod: 'lastDigit',
+      zone1: [1, 4, 7, 10, 13, 16], zone2: [2, 5, 8, 11, 14, 17], zone3: [3, 6, 9, 12, 15, 18],
+      zone1Desc: '第2,5,8,11,14,17位', zone2Desc: '第3,6,9,12,15,18位', zone3Desc: '第4,7,10,13,16,19位'
     }
   }
 
-  // ========== 11类游戏规则 (reward_num=11) ==========
-  if (rewardNum === 11) {
-    // 优先按游戏名称判断
-    // 美国11（qlq11）: 所有玩法分组 - 一区(第2,5位) 二区(第4,6位)
-    if (isQlqGame) {
-      return {
-        type: '11', zoneCount: 2, calcMethod: 'mod6Plus1',
-        zone1: [1, 4], zone2: [3, 5], zone3: [],
-        zone1Desc: '第2,5位', zone2Desc: '第4,6位', zone3Desc: ''
-      }
+  // ========== 美国28 (lotteryId=4) ==========
+  // group_id=15: 美国三取余
+  if (groupId === 15) {
+    return {
+      type: '16', zoneCount: 3, calcMethod: 'mod6Plus1',
+      zone1: [1, 4], zone2: [2, 5], zone3: [3, 5],
+      zone1Desc: '第2,5位', zone2Desc: '第3,6位', zone3Desc: '第4,6位'
     }
-    // qlq11: id=51
-    if (groupId === 51) {
-      return {
-        type: '11', zoneCount: 2, calcMethod: 'mod6Plus1',
-        zone1: [1, 4], zone2: [3, 5], zone3: [],
-        zone1Desc: '第2,5位', zone2Desc: '第4,6位', zone3Desc: ''
-      }
+  }
+  // group_id=16: 美国二取余
+  if (groupId === 16) {
+    return {
+      type: '11', zoneCount: 2, calcMethod: 'mod6Plus1',
+      zone1: [1, 4], zone2: [3, 5], zone3: [],
+      zone1Desc: '第2,5位', zone2Desc: '第4,6位', zone3Desc: ''
     }
-    // 默认11类: bj11/hg11/bg11/ca11 - 一区(第1,4,7,10,13,16位) 二区(第3,6,9,12,15,18位)
+  }
+  // group_id=14, 17: 美国标准28点 (和值, 号码形态)
+  if (lotteryId === 4 || [14, 17].includes(groupId)) {
+    return {
+      type: '28', zoneCount: 3, calcMethod: 'lastDigit',
+      zone1: [0, 5], zone2: [1, 3], zone3: [2, 4],
+      zone1Desc: '第1,6位', zone2Desc: '第2,4位', zone3Desc: '第3,5位'
+    }
+  }
+
+  // ========== 蛋蛋28 (lotteryId=5) ==========
+  // group_id=18, 19, 20, 21: 蛋蛋标准28点
+  if (lotteryId === 5 || [18, 19, 20, 21].includes(groupId)) {
+    return {
+      type: '28', zoneCount: 3, calcMethod: 'lastDigit',
+      zone1: [0, 1, 2, 3, 4, 5], zone2: [6, 7, 8, 9, 10, 11], zone3: [12, 13, 14, 15, 16, 17],
+      zone1Desc: '第1,2,3,4,5,6位', zone2Desc: '第7,8,9,10,11,12位', zone3Desc: '第13,14,15,16,17,18位'
+    }
+  }
+
+  // ========== 宾果28 (lotteryId=6) ==========
+  // group_id=26: 宾果前七取尾
+  if (groupId === 26) {
+    return {
+      type: '10', zoneCount: 1, calcMethod: 'lastDigitPlus1',
+      zone1: [0, 1, 2, 3, 4, 5, 6], zone2: [], zone3: [],
+      zone1Desc: '前7位', zone2Desc: '', zone3Desc: ''
+    }
+  }
+  // group_id=23: 宾果二取余
+  if (groupId === 23) {
     return {
       type: '11', zoneCount: 2, calcMethod: 'mod6Plus1',
       zone1: [0, 3, 6, 9, 12, 15], zone2: [2, 5, 8, 11, 14, 17], zone3: [],
       zone1Desc: '第1,4,7,10,13,16位', zone2Desc: '第3,6,9,12,15,18位', zone3Desc: ''
     }
   }
-
-  // ========== 36类游戏规则 (reward_num=36) ==========
-  if (rewardNum === 36) {
-    // bj36/ca36/hg36/bg36: id=10,19,24 - 一区(第2,5,8,11,14,17位) 二区(第3,6,9,12,15,18位) 三区(第4,7,10,13,16,19位)
-    if ([10, 19, 24].includes(groupId)) {
-      return {
-        type: '36', zoneCount: 3, calcMethod: 'lastDigit',
-        zone1: [1, 4, 7, 10, 13, 16], zone2: [2, 5, 8, 11, 14, 17], zone3: [3, 6, 9, 12, 15, 18],
-        zone1Desc: '第2,5,8,11,14,17位', zone2Desc: '第3,6,9,12,15,18位', zone3Desc: '第4,7,10,13,16,19位'
-      }
-    }
-    // 默认36类 - 一区(第1,2,3,4,5,6位) 二区(第7,8,9,10,11,12位) 三区(第13,14,15,16,17,18位)
+  // group_id=24: 宾果三取余
+  if (groupId === 24) {
     return {
-      type: '36', zoneCount: 3, calcMethod: 'lastDigit',
-      zone1: [0, 1, 2, 3, 4, 5], zone2: [6, 7, 8, 9, 10, 11], zone3: [12, 13, 14, 15, 16, 17],
-      zone1Desc: '第1,2,3,4,5,6位', zone2Desc: '第7,8,9,10,11,12位', zone3Desc: '第13,14,15,16,17,18位'
+      type: '16', zoneCount: 3, calcMethod: 'mod6Plus1',
+      zone1: [1, 4, 7, 10, 13, 16], zone2: [2, 5, 8, 11, 14, 17], zone3: [3, 6, 9, 12, 15, 18],
+      zone1Desc: '第2,5,8,11,14,17位', zone2Desc: '第3,6,9,12,15,18位', zone3Desc: '第4,7,10,13,16,19位'
+    }
+  }
+  // group_id=22, 25, 27, 28: 宾果标准28点 (和值, 号码形态, 龙虎豹, 大小单双)
+  if (lotteryId === 6 || [22, 25, 27, 28].includes(groupId)) {
+    return {
+      type: '28', zoneCount: 3, calcMethod: 'lastDigit',
+      zone1: [1, 4, 7, 10, 13, 16], zone2: [2, 5, 8, 11, 14, 17], zone3: [3, 6, 9, 12, 15, 18],
+      zone1Desc: '第2,5,8,11,14,17位', zone2Desc: '第3,6,9,12,15,18位', zone3Desc: '第4,7,10,13,16,19位'
     }
   }
 
-  // ========== 10类游戏规则 (reward_num=10) ==========
-  if (rewardNum === 10) {
-    return {
-      type: '10', zoneCount: 1, calcMethod: 'lastDigitPlus1',
-      zone1: [0, 1, 2, 3, 4, 5, 6], zone2: [], zone3: [],
-      zone1Desc: '第1-7位', zone2Desc: '', zone3Desc: ''
-    }
-  }
-
-  // ========== 默认使用28类规则 ==========
+  // ========== 默认规则 (其他未知游戏) ==========
+  // 默认使用加拿大/韩国/宾果的标准28点规则
   return {
     type: '28', zoneCount: 3, calcMethod: 'lastDigit',
     zone1: [1, 4, 7, 10, 13, 16], zone2: [2, 5, 8, 11, 14, 17], zone3: [3, 6, 9, 12, 15, 18],
@@ -487,8 +435,15 @@ const calculateVerifyFromActionNo = (actionNo: string, groupId: number, groupInf
   if (!actionNo) return null
 
   // 解析action_no，支持逗号分隔或其他分隔符
-  const nums = actionNo.split(/[,|]/).map(n => parseInt(n.trim(), 10)).filter(n => !isNaN(n))
+  let nums = actionNo.split(/[,|]/).map(n => parseInt(n.trim(), 10)).filter(n => !isNaN(n))
   if (nums.length < 6) return null
+
+  // 检查是否是美国游戏（qlq系列）- 美国游戏需要先排序号码再计算
+  const isQlqGame = gameName.includes('美国') || gameName.toLowerCase().includes('qlq') || lotteryId === 4
+  if (isQlqGame) {
+    // 美国游戏：先排序号码再按区位计算
+    nums = [...nums].sort((a, b) => a - b)
+  }
 
   const rule = getGameRuleByGroupId(groupId, groupInfo, rewardNum, gameType, gameName, lotteryId)
 
@@ -2347,6 +2302,7 @@ const currentPeriodRow = computed(() => {
     calcResult: null,
     resultAttrs: [] as string[],
     specialResultText: '',
+    zoneDigits: null as number[] | null,  // 特殊分组从finalResRecord解析的区位数字
     pool: currentPoolValue.toLocaleString(),
     winGold: '-',
     joinCount: currentJoinCount,
@@ -2435,16 +2391,33 @@ const drawHistory = computed(() => {
     }
 
     // 解析finalResRecord获取属性（如 "14|大双" -> { sum: 14, attrs: "大双" }）
+    // 特殊分组（号码形态）的格式是 "n1,n2,n3 | 结果文本"，如 "1,4,9 | 杂六"
     const finalResRecord = finalRes?.finalResRecord || ''
     let resultAttrs: string[] = []
     let specialResultText = ''  // 特殊分组的结果文本（如"半顺"、"杂六"、"虎"、"小单"）
+    let zoneDigits: number[] | null = null  // 特殊分组从finalResRecord解析的区位数字
+
+    // 判断当前分组是否是特殊分组
+    const isSpecialGroup = group && isSpecialPlayGroup(group.name)
 
     if (finalResRecord) {
       const pipeIndex = finalResRecord.indexOf('|')
       if (pipeIndex !== -1) {
+        const beforePipe = finalResRecord.substring(0, pipeIndex).trim()
         const attrsStr = finalResRecord.substring(pipeIndex + 1).trim()
         // 保存特殊分组的完整结果文本
         specialResultText = attrsStr
+
+        // 对于特殊分组，解析区位数字（格式如 "1,4,9" 或 "1+4+9"）
+        if (isSpecialGroup && beforePipe) {
+          // 尝试解析逗号分隔的数字
+          const digitParts = beforePipe.split(/[,+]/).map(s => s.trim())
+          const parsedDigits = digitParts.map(s => parseInt(s, 10)).filter(n => !isNaN(n))
+          if (parsedDigits.length >= 2 && parsedDigits.length <= 3) {
+            zoneDigits = parsedDigits
+          }
+        }
+
         // 将属性字符串拆分成单个属性（如 "大双" -> ["大", "双"]）
         resultAttrs = attrsStr.split('').filter(c => c.trim())
         // 如果是两个字符一组的情况（如"小单"），保持原样
@@ -2469,6 +2442,7 @@ const drawHistory = computed(() => {
       calcResult,
       resultAttrs,
       specialResultText,
+      zoneDigits,  // 特殊分组从finalResRecord解析的区位数字
       pool: poolValue.toLocaleString(),
       winGold: winGold.toLocaleString(),
       joinCount,
@@ -3330,22 +3304,11 @@ onUnmounted(() => {
                           <span v-if="item.specialResultText" class="result-text result-text-ml">{{ item.specialResultText }}</span>
                         </div>
                       </template>
-                      <!-- 特殊分组（号码形态、龙虎豹、大小单双）显示样式 -->
-                      <template v-else-if="item.status === 'ended' && item.calcResult && isActiveGroupSpecial">
+                      <!-- 特殊分组（号码形态、龙虎豹、大小单双）显示样式 - 使用从finalResRecord解析的区位数字 -->
+                      <template v-else-if="item.status === 'ended' && item.zoneDigits && item.zoneDigits.length > 0 && isActiveGroupSpecial">
                         <div class="result-display result-display-center">
-                          <!-- 三个数字分别显示在圆圈中 -->
-                          <template v-if="item.calcResult.zoneCount === 3">
-                            <span class="num-circle">{{ item.calcResult.n1 }}</span>
-                            <span class="num-circle">{{ item.calcResult.n2 }}</span>
-                            <span class="num-circle">{{ item.calcResult.n3 }}</span>
-                          </template>
-                          <template v-else-if="item.calcResult.zoneCount === 2">
-                            <span class="num-circle">{{ item.calcResult.n1 }}</span>
-                            <span class="num-circle">{{ item.calcResult.n2 }}</span>
-                          </template>
-                          <template v-else>
-                            <span class="num-circle">{{ item.calcResult.n1 }}</span>
-                          </template>
+                          <!-- 显示从finalResRecord解析的区位数字 -->
+                          <span v-for="(num, idx) in item.zoneDigits" :key="idx" class="num-circle">{{ num }}</span>
                           <span class="equals-sign">=</span>
                           <!-- 结果文本标签 -->
                           <span :class="['result-text-badge', getSpecialResultClass(item.specialResultText)]">{{ item.specialResultText }}</span>

@@ -61,6 +61,9 @@ const countdown = ref({ stop: 82, draw: 132 })
 const serverSyncTime = ref(0) // Local timestamp when we received server data
 const serverCountdowns = ref({ stop: 0, draw: 0 }) // Raw countdown values from server
 
+// Game suspended state (code 3001)
+const isSuspended = ref(false)
+
 // Custom modes from API
 const customModes = ref<ModeItem[]>([])
 const selectedMode = ref<ModeItem | null>(null)
@@ -715,7 +718,7 @@ const myBetHistory = computed(() => {
     return {
       id: record.id || 0,
       no: record.expect_no || '',
-      drawTime: record.created_at || '',
+      drawTime: record.updated_at || '',
       result: 0,
       betAmount: betGold.toLocaleString(),
       winAmount: winGold.toLocaleString(),
@@ -723,7 +726,8 @@ const myBetHistory = computed(() => {
       betTime: record.bet_time || record.created_at || '',
       betNo: record.bet_no || [],
       status: status,
-      isOpened: record.is_opened === 1
+      isOpened: record.is_opened === 1,
+      isAuto: record.is_auto === 1
     }
   })
 })
@@ -2119,8 +2123,9 @@ const currentGameColorClass = computed(() => {
   return game?.colorClass || 'system'
 })
 
-// Countdown status: 'betting' | 'closing' | 'drawing'
+// Countdown status: 'betting' | 'closing' | 'drawing' | 'suspended'
 const countdownStatus = computed(() => {
+  if (isSuspended.value) return 'suspended'
   if (countdown.value.stop > 0) return 'betting'
   if (countdown.value.draw > 0) return 'closing'
   return 'drawing'
@@ -2128,7 +2133,9 @@ const countdownStatus = computed(() => {
 
 // Countdown display text
 const countdownText = computed(() => {
-  if (countdownStatus.value === 'betting') {
+  if (countdownStatus.value === 'suspended') {
+    return '停盘中...'
+  } else if (countdownStatus.value === 'betting') {
     return `距封盘 ${countdown.value.stop} 秒`
   } else if (countdownStatus.value === 'closing') {
     return `距开奖 ${countdown.value.draw} 秒`
@@ -2630,6 +2637,24 @@ const fetchExpectInfoData = async () => {
       lottery_id: activeGame.value,
       game_group_id: activeGroupId.value
     })
+
+    // Handle suspended state (code 3001)
+    if (res.code === 3001) {
+      isSuspended.value = true
+      // Still update the data if available
+      if (res.data) {
+        currExpectInfo.value = res.data.currExpectInfo || null
+        lastExpectInfo.value = res.data.lastExpectInfo || null
+        if (currExpectInfo.value) {
+          gameInfo.value.period = currExpectInfo.value.expect_no || ''
+        }
+      }
+      return
+    }
+
+    // Reset suspended state for normal response
+    isSuspended.value = false
+
     if (res.code === 200 && res.data) {
       const newExpectNo = res.data.currExpectInfo?.expect_no || ''
 
@@ -3261,7 +3286,10 @@ onUnmounted(() => {
                 <li class="info-item clock-item">
                   <span class="clock-text">
                     第<span class="clock-num">{{ gameInfo.period }}</span>期
-                    <template v-if="countdownStatus === 'betting'">
+                    <template v-if="countdownStatus === 'suspended'">
+                      <span class="countdown-suspended">停盘中...</span>
+                    </template>
+                    <template v-else-if="countdownStatus === 'betting'">
                       <span class="countdown-time">{{ countdownText }}</span>
                     </template>
                     <template v-else-if="countdownStatus === 'closing'">
@@ -3422,8 +3450,8 @@ onUnmounted(() => {
                 <thead>
                   <tr>
                     <th>期号</th>
-                    <th>开奖时间</th>
-                    <th>开奖结果</th>
+                    <th>结算时间</th>
+                    <th>是否自动</th>
                     <th>投注金币</th>
                     <th>中奖金币</th>
                     <th>盈亏</th>
@@ -3437,12 +3465,7 @@ onUnmounted(() => {
                     <td>{{ bet.no }}</td>
                     <td>{{ bet.drawTime }}</td>
                     <td>
-                      <template v-if="bet.isOpened">
-                        <span :class="['num-circle', getNumColorClass(String(bet.result).padStart(2, '0'))]">{{ bet.result }}</span>
-                      </template>
-                      <template v-else>
-                        <span class="not-drawn">-</span>
-                      </template>
+                      <span :class="bet.isAuto ? 'auto-yes' : 'auto-no'">{{ bet.isAuto ? '是' : '否' }}</span>
                     </td>
                     <td><span class="coin">{{ bet.betAmount }}</span></td>
                     <td><span class="coin">{{ bet.winAmount }}</span></td>
@@ -4190,7 +4213,10 @@ onUnmounted(() => {
               <div class="period-info-bar">
                 <div class="period-countdown">
                   第<span class="period-num">{{ gameInfo.period }}</span>期
-                  <template v-if="countdownStatus === 'betting'">
+                  <template v-if="countdownStatus === 'suspended'">
+                    <span class="time-red">停盘中...</span>
+                  </template>
+                  <template v-else-if="countdownStatus === 'betting'">
                     距<span class="time-red">{{ countdown.stop }}</span>秒停止竞猜
                   </template>
                   <template v-else-if="countdownStatus === 'closing'">
@@ -4565,6 +4591,7 @@ onUnmounted(() => {
 .countdown-time { color: #006600; font-weight: bold; margin-left: 10px; }
 .countdown-time.closing { color: #ff6600; }
 .countdown-drawing { color: #cc0000; font-weight: bold; margin-left: 10px; }
+.countdown-suspended { color: #999999; font-weight: bold; margin-left: 10px; }
 .loading-gif { vertical-align: middle; margin-left: 5px; }
 
 .order-num { color: #ff3000; font-size: 28px; font-weight: 700; }
@@ -5908,6 +5935,15 @@ onUnmounted(() => {
 .mybet-table .not-drawn {
   color: #999;
   font-size: 16px;
+}
+
+.mybet-table .auto-yes {
+  color: #4CAF50;
+  font-weight: bold;
+}
+
+.mybet-table .auto-no {
+  color: #999;
 }
 
 .mybet-table .bet-status {

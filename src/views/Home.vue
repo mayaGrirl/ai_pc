@@ -11,7 +11,7 @@ import { rankToday, rankYesterday } from '@/api/rank'
 import { httpConfigRKey } from '@/api/common'
 import SodiumEncryptor from '@/utils/sodium'
 import type { IndexDataItem, gameItem } from '@/types/index.type'
-import type { RankTodayField } from '@/types/rank.type'
+import {TodayField} from '@/types/rank.type'
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -205,10 +205,10 @@ const generateFakeRankings = (count: number, startRank: number): RankingItem[] =
 }
 
 // 转换API数据为显示格式
-const convertRankData = (data: RankTodayField[]): RankingItem[] => {
+const convertRankData = (data: TodayField[]): RankingItem[] => {
   return data.map((item, index) => ({
     rank: index + 1,
-    user: item.member_field?.nickname || item.member?.user || generateRandomNickname(),
+    user: item.nickname || generateRandomNickname(),
     amount: item.profit || 0
   }))
 }

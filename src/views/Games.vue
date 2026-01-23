@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import MainLayout from '@/components/layout/MainLayout.vue'
 import {
@@ -15,7 +15,6 @@ import {
   autoOne,
   setAuto
 } from '@/api/game'
-import { rankToday, rankYesterday, rankWeek } from '@/api/rank'
 import type {
   GameTypeMapItem,
   Game,
@@ -29,8 +28,6 @@ import type {
   BetNoItem,
   AutoItem
 } from '@/types/game.type'
-import type { RankTodayField, RankWeekField } from '@/types/rank.type'
-import type { HttpRes } from '@/types/http.type'
 
 const route = useRoute()
 
@@ -41,13 +38,7 @@ const isLoadingRecords = ref(false)
 const isLoadingBetRecords = ref(false)
 const isLoadingModes = ref(false)
 const isLoadingProfitLoss = ref(false)
-const isLoadingRank = ref(false)
 const isSubmitting = ref(false)
-
-// Ranking state - 三列同时显示
-const rankDataToday = ref<RankTodayField[]>([])
-const rankDataYesterday = ref<RankTodayField[]>([])
-const rankDataWeek = ref<RankWeekField[]>([])
 
 // Betting panel state
 const showBettingPanel = ref(false)
@@ -2801,54 +2792,6 @@ const profitVisiblePages = computed(() => {
   return pages
 })
 
-// Fetch ranking data - 同时获取三个榜单
-const fetchRankData = async () => {
-  isLoadingRank.value = true
-  rankDataToday.value = []
-  rankDataYesterday.value = []
-  rankDataWeek.value = []
-
-  // 分别获取三个榜单，单个失败不影响其他
-  const fetchWithFallback = async <T>(fetchFn: () => Promise<HttpRes<T[]>>): Promise<T[]> => {
-    try {
-      const res = await fetchFn()
-      if (res.code === 200 && res.data) {
-        return res.data
-      }
-    } catch (error) {
-      console.error('获取排行数据失败:', error)
-    }
-    return []
-  }
-
-  try {
-    const [todayData, yesterdayData, weekData] = await Promise.all([
-      fetchWithFallback(rankToday),
-      fetchWithFallback(rankYesterday),
-      fetchWithFallback(rankWeek)
-    ])
-    rankDataToday.value = todayData as RankTodayField[]
-    rankDataYesterday.value = yesterdayData as RankTodayField[]
-    rankDataWeek.value = weekData as RankWeekField[]
-  } finally {
-    isLoadingRank.value = false
-  }
-}
-
-// Get medal class for ranking
-const getMedalClass = (rank: number) => {
-  switch (rank) {
-    case 1:
-      return 'medal-gold'
-    case 2:
-      return 'medal-silver'
-    case 3:
-      return 'medal-bronze'
-    default:
-      return 'medal-normal'
-  }
-}
-
 // Select a game
 const selectGame = async (gameId: number) => {
   activeGame.value = gameId
@@ -2938,8 +2881,6 @@ const setActivePanel = async (panel: string) => {
     await fetchProfitLossData(true)
   } else if (panel === 'trend') {
     await fetchTrendData()
-  } else if (panel === 'ranking') {
-    await fetchRankData()
   }
 }
 
@@ -3991,106 +3932,6 @@ onUnmounted(() => {
                 <template v-else>
                   <div class="rule-empty">请选择玩法分组查看规则</div>
                 </template>
-              </div>
-            </div>
-
-            <!-- Ranking Panel -->
-            <div class="panel ranking-panel" v-show="activePanel === 'ranking'">
-              <div class="ranking-container">
-                <!-- Three columns layout -->
-                <div class="ranking-columns">
-                  <!-- 今日盈利榜 -->
-                  <div class="ranking-column">
-                    <div class="ranking-header">今日盈利榜</div>
-                    <div v-if="isLoadingRank" class="ranking-loading">
-                      <div v-for="i in 10" :key="`today-skeleton-${i}`" class="rank-skeleton">
-                        <div class="skeleton-medal"></div>
-                        <div class="skeleton-info"><div class="skeleton-name"></div><div class="skeleton-bet"></div></div>
-                        <div class="skeleton-score"></div>
-                      </div>
-                    </div>
-                    <div v-else-if="rankDataToday.length === 0" class="ranking-empty">暂无数据</div>
-                    <div v-else class="ranking-list">
-                      <div v-for="(item, index) in rankDataToday" :key="`today-${item.id}`" class="rank-item">
-                        <span :class="['rank-medal', getMedalClass(index + 1)]">{{ index + 1 }}</span>
-                        <div class="rank-info">
-                          <div class="rank-name-row">
-                            <img :src="`/ranking/vip/${item.member?.level || 1}.png`" alt="VIP" class="rank-vip" @error="($event.target as HTMLImageElement).style.display = 'none'" />
-                            <span class="rank-name">{{ item.member_field?.nickname || item.member?.user || '玩家' }}</span>
-                          </div>
-                          <div class="rank-bet">
-                            <img src="/ranking/coin.png" alt="金豆" class="bet-icon" @error="($event.target as HTMLImageElement).style.display = 'none'" />
-                            <span>或 {{ item.bet_gold?.toLocaleString() || 0 }}</span>
-                          </div>
-                        </div>
-                        <div class="rank-score">
-                          <span class="score-value">{{ item.profit?.toLocaleString() || 0 }}</span>
-                          <img src="/ranking/coin.png" alt="金豆" class="score-icon" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- 昨日盈利榜 -->
-                  <div class="ranking-column">
-                    <div class="ranking-header">昨日盈利榜</div>
-                    <div v-if="isLoadingRank" class="ranking-loading">
-                      <div v-for="i in 10" :key="`yesterday-skeleton-${i}`" class="rank-skeleton">
-                        <div class="skeleton-medal"></div>
-                        <div class="skeleton-info"><div class="skeleton-name"></div><div class="skeleton-bet"></div></div>
-                        <div class="skeleton-score"></div>
-                      </div>
-                    </div>
-                    <div v-else-if="rankDataYesterday.length === 0" class="ranking-empty">暂无数据</div>
-                    <div v-else class="ranking-list">
-                      <div v-for="(item, index) in rankDataYesterday" :key="`yesterday-${item.id}`" class="rank-item">
-                        <span :class="['rank-medal', getMedalClass(index + 1)]">{{ index + 1 }}</span>
-                        <div class="rank-info">
-                          <div class="rank-name-row">
-                            <img :src="`/ranking/vip/${item.member?.level || 1}.png`" alt="VIP" class="rank-vip" @error="($event.target as HTMLImageElement).style.display = 'none'" />
-                            <span class="rank-name">{{ item.member_field?.nickname || item.member?.user || '玩家' }}</span>
-                          </div>
-                          <div class="rank-bet">
-                            <img src="/ranking/coin.png" alt="金豆" class="bet-icon" @error="($event.target as HTMLImageElement).style.display = 'none'" />
-                            <span>或 {{ item.bet_gold?.toLocaleString() || 0 }}</span>
-                          </div>
-                        </div>
-                        <div class="rank-score">
-                          <span class="score-value">{{ item.profit?.toLocaleString() || 0 }}</span>
-                          <img src="/ranking/coin.png" alt="金豆" class="score-icon" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- 上周盈利榜 -->
-                  <div class="ranking-column">
-                    <div class="ranking-header">上周盈利榜</div>
-                    <div v-if="isLoadingRank" class="ranking-loading">
-                      <div v-for="i in 10" :key="`week-skeleton-${i}`" class="rank-skeleton">
-                        <div class="skeleton-medal"></div>
-                        <div class="skeleton-info"><div class="skeleton-name"></div></div>
-                        <div class="skeleton-score"></div>
-                      </div>
-                    </div>
-                    <div v-else-if="rankDataWeek.length === 0" class="ranking-empty">暂无数据</div>
-                    <div v-else class="ranking-list">
-                      <div v-for="item in rankDataWeek" :key="`week-${item.rank}`" class="rank-item">
-                        <span :class="['rank-medal', getMedalClass(item.rank)]">{{ item.rank }}</span>
-                        <div class="rank-info">
-                          <div class="rank-name-row">
-                            <img :src="`/ranking/vip/${item.level}.png`" alt="VIP" class="rank-vip" @error="($event.target as HTMLImageElement).style.display = 'none'" />
-                            <span class="rank-name">{{ item.name }}</span>
-                          </div>
-                        </div>
-                        <div class="rank-score">
-                          <span class="score-value">{{ item.score?.toLocaleString() || 0 }}</span>
-                          <img src="/ranking/coin.png" alt="金豆" class="score-icon" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
 

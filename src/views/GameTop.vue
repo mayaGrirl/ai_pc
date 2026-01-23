@@ -2,16 +2,18 @@
 import { ref, onMounted } from 'vue'
 import MainLayout from '@/components/layout/MainLayout.vue'
 import { rankToday, rankYesterday, rankWeek } from '@/api/rank'
-import type { RankTodayField, RankWeekField } from '@/types/rank.type'
+import {LastWeekField, TodayField, YesterdayField} from '@/types/rank.type'
 import type { HttpRes } from '@/types/http.type'
+import {useRouter} from "vue-router";
 
+const router = useRouter()
 // Loading state
 const isLoading = ref(false)
 
 // Ranking data
-const rankDataToday = ref<RankTodayField[]>([])
-const rankDataYesterday = ref<RankTodayField[]>([])
-const rankDataWeek = ref<RankWeekField[]>([])
+const rankDataToday = ref<TodayField[]>([])
+const rankDataYesterday = ref<YesterdayField[]>([])
+const rankDataWeek = ref<LastWeekField[]>([])
 
 // Fetch ranking data
 const fetchRankData = async () => {
@@ -35,9 +37,9 @@ const fetchRankData = async () => {
       fetchWithFallback(rankYesterday),
       fetchWithFallback(rankWeek)
     ])
-    rankDataToday.value = todayData as RankTodayField[]
-    rankDataYesterday.value = yesterdayData as RankTodayField[]
-    rankDataWeek.value = weekData as RankWeekField[]
+    rankDataToday.value = todayData as TodayField[]
+    rankDataYesterday.value = yesterdayData as YesterdayField[]
+    rankDataWeek.value = weekData as LastWeekField[]
   } finally {
     isLoading.value = false
   }
@@ -64,8 +66,8 @@ onMounted(() => {
       <!-- Top Buttons -->
       <div class="top-buttons">
         <button class="btn-primary active">游戏盈利榜</button>
-        <button class="btn-outline">推广收益榜</button>
-        <button class="btn-outline" @click="$router.push('/games')">返回游戏中心</button>
+<!--        <button class="btn-outline">推广收益榜</button>-->
+        <button class="btn-outline" @click="router.push('/games')">返回游戏中心</button>
       </div>
 
       <!-- Three Column Ranking -->
@@ -91,17 +93,17 @@ onMounted(() => {
                 <div class="rank-info">
                   <div class="rank-name-row">
                     <img
-                      :src="`/ranking/vip/${item.member?.level || 1}.png`"
+                      :src="`/ranking/vip/${item.level || 1}.png`"
                       alt="VIP"
                       class="rank-vip"
                       @error="($event.target as HTMLImageElement).style.display = 'none'"
                     />
-                    <span class="rank-name">{{ item.member_field?.nickname || item.member?.user || '玩家' }}</span>
+                    <span class="rank-name">{{ item.nickname || '玩家' + item.id }}</span>
                   </div>
-                  <div class="rank-bet">
-                    <img src="/ranking/coin.png" alt="金豆" class="bet-icon" />
-                    <span>或 {{ item.bet_gold?.toLocaleString() || 0 }}</span>
-                  </div>
+<!--                  <div class="rank-bet">-->
+<!--                    <img src="/ranking/coin.png" alt="金豆" class="bet-icon" />-->
+<!--                    <span>或 {{ item.bet_gold?.toLocaleString() || 0 }}</span>-->
+<!--                  </div>-->
                 </div>
                 <div class="rank-score">
                   <span class="score-value">{{ item.profit?.toLocaleString() || 0 }}</span>
@@ -131,17 +133,17 @@ onMounted(() => {
                 <div class="rank-info">
                   <div class="rank-name-row">
                     <img
-                      :src="`/ranking/vip/${item.member?.level || 1}.png`"
+                      :src="`/ranking/vip/${item.level || 1}.png`"
                       alt="VIP"
                       class="rank-vip"
                       @error="($event.target as HTMLImageElement).style.display = 'none'"
                     />
-                    <span class="rank-name">{{ item.member_field?.nickname || item.member?.user || '玩家' }}</span>
+                    <span class="rank-name">{{ item.nickname || '玩家' + item.id }}</span>
                   </div>
-                  <div class="rank-bet">
-                    <img src="/ranking/coin.png" alt="金豆" class="bet-icon" />
-                    <span>或 {{ item.bet_gold?.toLocaleString() || 0 }}</span>
-                  </div>
+<!--                  <div class="rank-bet">-->
+<!--                    <img src="/ranking/coin.png" alt="金豆" class="bet-icon" />-->
+<!--                    <span>或 {{ item.bet_gold?.toLocaleString() || 0 }}</span>-->
+<!--                  </div>-->
                 </div>
                 <div class="rank-score">
                   <span class="score-value">{{ item.profit?.toLocaleString() || 0 }}</span>
@@ -165,8 +167,8 @@ onMounted(() => {
             </div>
             <div v-else-if="rankDataWeek.length === 0" class="ranking-empty">暂无数据</div>
             <div v-else class="ranking-list">
-              <div v-for="item in rankDataWeek" :key="`week-${item.rank}`" class="rank-item">
-                <span :class="['rank-medal', getMedalClass(item.rank)]">{{ item.rank }}</span>
+              <div v-for="(item, index) in rankDataWeek" :key="`week-${index+1}`" class="rank-item">
+                <span :class="['rank-medal', getMedalClass(index+1)]">{{ index+1 }}</span>
                 <div class="rank-info">
                   <div class="rank-name-row">
                     <img
@@ -175,11 +177,11 @@ onMounted(() => {
                       class="rank-vip"
                       @error="($event.target as HTMLImageElement).style.display = 'none'"
                     />
-                    <span class="rank-name">{{ item.name }}</span>
+                    <span class="rank-name">{{ item.nickname }}</span>
                   </div>
                 </div>
                 <div class="rank-score">
-                  <span class="score-value">{{ item.score?.toLocaleString() || 0 }}</span>
+                  <span class="score-value">{{ item.profit?.toLocaleString() || 0 }}</span>
                   <img src="/ranking/coin.png" alt="金豆" class="score-icon" />
                 </div>
               </div>
@@ -274,7 +276,7 @@ onMounted(() => {
 
 .rank-item {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   padding: 10px 12px;
   border-bottom: 1px solid #f0f0f0;
 }

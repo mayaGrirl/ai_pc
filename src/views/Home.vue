@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import MainLayout from '@/components/layout/MainLayout.vue'
+import Skeleton from '@/components/Skeleton.vue'
 import { getBanners, getAnnouncements, indexGameHotNew, getHomePopup } from '@/api/home'
 import { withdrawalDynamics } from '@/api/customer'
 import { rankToday, rankYesterday } from '@/api/rank'
@@ -51,8 +52,9 @@ interface WithdrawRecord {
   amount: number
 }
 const withdrawRecords = ref<WithdrawRecord[]>([])
-const withdrawScrollTop = ref(0)
-let withdrawScrollTimer: ReturnType<typeof setInterval> | null = null
+const isScrollPaused = ref(false) // Control CSS animation pause state
+let bannerTimer: ReturnType<typeof setInterval> | null = null
+let gameCountTimer: ReturnType<typeof setInterval> | null = null
 
 // 生成随机手机号（隐藏中间四位）
 const generateRandomPhone = () => {
@@ -112,29 +114,14 @@ const fetchWithdrawRecords = async () => {
   }
 }
 
-// 开始滚动动画
+// CSS animation control - pause/resume via class binding
 const startWithdrawScroll = () => {
-  if (withdrawScrollTimer) return
-
-  withdrawScrollTimer = setInterval(() => {
-    const itemHeight = 41 // 每条记录的高度
-    const totalHeight = withdrawRecords.value.length * itemHeight
-
-    withdrawScrollTop.value += 1
-
-    // 当滚动到一半时，重置回顶部实现无缝循环
-    if (withdrawScrollTop.value >= totalHeight / 2) {
-      withdrawScrollTop.value = 0
-    }
-  }, 50)
+  isScrollPaused.value = false
 }
 
-// 停止滚动
+// Stop scrolling (pause animation)
 const stopWithdrawScroll = () => {
-  if (withdrawScrollTimer) {
-    clearInterval(withdrawScrollTimer)
-    withdrawScrollTimer = null
-  }
+  isScrollPaused.value = true
 }
 
 // Rankings data
@@ -467,11 +454,11 @@ onMounted(async () => {
 
     // Auto-play banner (only if banners exist)
     if (banners.value.length > 0) {
-      setInterval(nextBanner, 5000)
+      bannerTimer = setInterval(nextBanner, 5000)
     }
 
     // Simulate game count growth
-    setInterval(() => {
+    gameCountTimer = setInterval(() => {
       gameCount.value += Math.floor(Math.random() * 100)
     }, 2000)
   } catch (error) {
@@ -484,6 +471,14 @@ onMounted(async () => {
 // Cleanup
 onUnmounted(() => {
   stopWithdrawScroll()
+  if (bannerTimer) {
+    clearInterval(bannerTimer)
+    bannerTimer = null
+  }
+  if (gameCountTimer) {
+    clearInterval(gameCountTimer)
+    gameCountTimer = null
+  }
 })
 
 const goToGame = (gameId: number) => {
@@ -620,7 +615,19 @@ const closePopup = () => {
             <router-link class="more" to="/games">更多<img src="/index_more.png"></router-link>
           </div>
           <div class="list">
-            <ul>
+            <!-- Skeleton loading -->
+            <ul v-if="loading">
+              <li v-for="i in 4" :key="`skeleton-new-${i}`">
+                <div class="img">
+                  <Skeleton width="193px" height="320px" border-radius="4px" />
+                </div>
+                <div class="text">
+                  <dd><Skeleton width="120px" height="20px" style="margin-top: 10px;" /></dd>
+                </div>
+              </li>
+            </ul>
+            <!-- Actual content -->
+            <ul v-else>
               <li v-for="(game, index) in newGames.slice(0, 4)" :key="game.id" @click="goToGame(game.id)">
                 <i class="game-type type"></i>
                 <div class="img">
@@ -666,8 +673,7 @@ const closePopup = () => {
           >
             <div class="bd scroll-container">
               <ul
-                class="infoList"
-                :style="{ transform: `translateY(-${withdrawScrollTop}px)` }"
+                :class="['infoList', 'scroll-animation', { 'scroll-paused': isScrollPaused }]"
               >
                 <!-- 原始数据 -->
                 <li v-for="(record, index) in withdrawRecords" :key="`a-${index}`">
@@ -691,7 +697,19 @@ const closePopup = () => {
             <router-link class="more" to="/games">更多<img src="/index_more.png"></router-link>
           </div>
           <div class="list">
-            <ul>
+            <!-- Skeleton loading -->
+            <ul v-if="loading">
+              <li v-for="i in 4" :key="`skeleton-hot-${i}`">
+                <div class="img">
+                  <Skeleton width="193px" height="320px" border-radius="4px" />
+                </div>
+                <div class="text">
+                  <dd><Skeleton width="120px" height="20px" style="margin-top: 10px;" /></dd>
+                </div>
+              </li>
+            </ul>
+            <!-- Actual content -->
+            <ul v-else>
               <li v-for="(game, index) in hotGames.slice(0, 4)" :key="game.id" @click="goToGame(game.id)">
                 <i class="game-type type"></i>
                 <div class="img">
@@ -1522,6 +1540,25 @@ const closePopup = () => {
   padding: 0;
   margin: 0;
   will-change: transform;
+}
+
+/* CSS-based smooth scroll animation - replaces JS setInterval for better performance */
+.index_center .center_box .cash_box .cash_list .infoList.scroll-animation {
+  animation: withdraw-scroll 20s linear infinite;
+}
+
+.index_center .center_box .cash_box .cash_list .infoList.scroll-paused {
+  animation-play-state: paused;
+}
+
+@keyframes withdraw-scroll {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    /* Scroll by half the total height (10 items * 41px = 410px / 2 = 205px) */
+    transform: translateY(-205px);
+  }
 }
 
 .index_center .center_box .cash_box .cash_list .infoList li {

@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import MainLayout from '@/components/layout/MainLayout.vue'
+import Skeleton from '@/components/Skeleton.vue'
 import {
   gameAll,
   playAll,
@@ -28,8 +29,10 @@ import type {
   BetNoItem,
   AutoItem
 } from '@/types/game.type'
+import { useToast } from '@/composables/useToast'
 
 const route = useRoute()
+const toast = useToast()
 
 // Loading states
 const isLoadingGames = ref(true)
@@ -44,6 +47,13 @@ const isSubmitting = ref(false)
 const showBettingPanel = ref(false)
 const currentBettingPeriod = ref('')
 const countdown = ref({ stop: 82, draw: 132 })
+
+// Server time sync - store the sync point to calculate accurate countdown
+const serverSyncTime = ref(0) // Local timestamp when we received server data
+const serverCountdowns = ref({ stop: 0, draw: 0 }) // Raw countdown values from server
+
+// Game suspended state (code 3001)
+const isSuspended = ref(false)
 
 // Custom modes from API
 const customModes = ref<ModeItem[]>([])
@@ -699,7 +709,7 @@ const myBetHistory = computed(() => {
     return {
       id: record.id || 0,
       no: record.expect_no || '',
-      drawTime: record.created_at || '',
+      drawTime: record.updated_at || '',
       result: 0,
       betAmount: betGold.toLocaleString(),
       winAmount: winGold.toLocaleString(),
@@ -707,7 +717,8 @@ const myBetHistory = computed(() => {
       betTime: record.bet_time || record.created_at || '',
       betNo: record.bet_no || [],
       status: status,
-      isOpened: record.is_opened === 1
+      isOpened: record.is_opened === 1,
+      isAuto: record.is_auto === 1
     }
   })
 })
@@ -1202,11 +1213,11 @@ const handleDeleteMode = async (mode: ModeItem) => {
         selectedMode.value = null
       }
     } else {
-      alert(res.msg || '删除失败')
+      toast.error(String(res.msg || '删除失败'))
     }
   } catch (error) {
     console.error('Delete mode error:', error)
-    alert('删除模式失败')
+    toast.error('删除模式失败')
   }
 }
 
@@ -1649,17 +1660,17 @@ const handleModeFixedAllIn = () => {
 // Save mode (create or update)
 const handleSaveMode = async () => {
   if (!modeFormName.value.trim()) {
-    alert('请输入模式名称')
+    toast.warning('请输入模式名称')
     return
   }
 
   if (modeSelectedPlays.value.length === 0) {
-    alert('请选择至少一个玩法')
+    toast.warning('请选择至少一个玩法')
     return
   }
 
   if (modeEditTotalAmount.value <= 0) {
-    alert('总金额必须大于0')
+    toast.warning('总金额必须大于0')
     return
   }
 
@@ -1686,15 +1697,15 @@ const handleSaveMode = async () => {
     isSavingMode.value = true
     const res = await setMode(payload)
     if (res.code === 200) {
-      alert(editingMode.value ? '模式更新成功' : '模式创建成功')
+      toast.success(editingMode.value ? '模式更新成功' : '模式创建成功')
       closeModeEditModal()
       await fetchModes()
     } else {
-      alert(res.msg || '保存失败')
+      toast.error(String(res.msg || '保存失败'))
     }
   } catch (error) {
     console.error('Save mode error:', error)
-    alert('保存模式失败')
+    toast.error('保存模式失败')
   } finally {
     isSavingMode.value = false
   }
@@ -1745,27 +1756,27 @@ const fetchAutoConfig = async () => {
 // Handle auto submit (start/stop)
 const handleAutoSubmit = async (status: number) => {
   if (!activeGame.value) {
-    alert('请选择游戏')
+    toast.warning('请选择游戏')
     return
   }
 
   if (!activeGroupId.value) {
-    alert('请选择玩法分组')
+    toast.warning('请选择玩法分组')
     return
   }
 
   if (!autoSelectedMode.value) {
-    alert('请选择投注模式')
+    toast.warning('请选择投注模式')
     return
   }
 
   const expectNums = parseInt(autoTotalExpectNums.value, 10)
   if (isNaN(expectNums) || expectNums < 1) {
-    alert('执行期数最小为1')
+    toast.warning('执行期数最小为1')
     return
   }
   if (expectNums > 1440) {
-    alert('执行期数最大为1440')
+    toast.warning('执行期数最大为1440')
     return
   }
 
@@ -1773,7 +1784,7 @@ const handleAutoSubmit = async (status: number) => {
   const maxGoldNum = parseInt(autoMaxGold.value, 10) || 0
 
   if (minGoldNum < 0 || maxGoldNum < 0) {
-    alert('金币数量不能为负数')
+    toast.warning('金币数量不能为负数')
     return
   }
 
@@ -1790,16 +1801,16 @@ const handleAutoSubmit = async (status: number) => {
     })
 
     if (res.code === 200) {
-      alert(status === 1 ? '自动投注已启动' : '自动投注已停止')
+      toast.success(status === 1 ? '自动投注已启动' : '自动投注已停止')
       autoStatus.value = status
       // Refresh config
       await fetchAutoConfig()
     } else {
-      alert(res.msg || '操作失败')
+      toast.error(String(res.msg || '操作失败'))
     }
   } catch (error) {
     console.error('操作失败', error)
-    alert('操作失败，请重试')
+    toast.error('操作失败，请重试')
   } finally {
     isSubmittingAuto.value = false
   }
@@ -1816,7 +1827,7 @@ const handleSelectAutoMode = (mode: ModeItem) => {
 // Fetch previous period bets
 const fetchPreviousPeriodBets = async () => {
   if (!activeGame.value || !activeGroupId.value || !lastExpectInfo.value?.expect_no) {
-    alert('无法获取上期投注记录')
+    toast.warning('无法获取上期投注记录')
     return
   }
 
@@ -1832,7 +1843,7 @@ const fetchPreviousPeriodBets = async () => {
     if (res.code === 200 && res.data) {
       const list = res.data.list || []
       if (list.length === 0) {
-        alert('上期没有投注记录')
+        toast.info('上期没有投注记录')
         return
       }
 
@@ -1853,7 +1864,7 @@ const fetchPreviousPeriodBets = async () => {
 
       const playNames = Object.keys(prevBets)
       if (playNames.length === 0) {
-        alert('上期没有投注记录')
+        toast.info('上期没有投注记录')
         return
       }
 
@@ -1864,11 +1875,11 @@ const fetchPreviousPeriodBets = async () => {
       })
       playAmounts.value = newAmounts
     } else {
-      alert('上期没有投注记录')
+      toast.info('上期没有投注记录')
     }
   } catch (error) {
     console.error('获取上期投注记录失败', error)
-    alert('获取上期投注记录失败')
+    toast.error('获取上期投注记录失败')
   }
 }
 
@@ -2103,8 +2114,9 @@ const currentGameColorClass = computed(() => {
   return game?.colorClass || 'system'
 })
 
-// Countdown status: 'betting' | 'closing' | 'drawing'
+// Countdown status: 'betting' | 'closing' | 'drawing' | 'suspended'
 const countdownStatus = computed(() => {
+  if (isSuspended.value) return 'suspended'
   if (countdown.value.stop > 0) return 'betting'
   if (countdown.value.draw > 0) return 'closing'
   return 'drawing'
@@ -2112,7 +2124,9 @@ const countdownStatus = computed(() => {
 
 // Countdown display text
 const countdownText = computed(() => {
-  if (countdownStatus.value === 'betting') {
+  if (countdownStatus.value === 'suspended') {
+    return '停盘中...'
+  } else if (countdownStatus.value === 'betting') {
     return `距封盘 ${countdown.value.stop} 秒`
   } else if (countdownStatus.value === 'closing') {
     return `距开奖 ${countdown.value.draw} 秒`
@@ -2614,6 +2628,24 @@ const fetchExpectInfoData = async () => {
       lottery_id: activeGame.value,
       game_group_id: activeGroupId.value
     })
+
+    // Handle suspended state (code 3001)
+    if (res.code === 3001) {
+      isSuspended.value = true
+      // Still update the data if available
+      if (res.data) {
+        currExpectInfo.value = res.data.currExpectInfo || null
+        lastExpectInfo.value = res.data.lastExpectInfo || null
+        if (currExpectInfo.value) {
+          gameInfo.value.period = currExpectInfo.value.expect_no || ''
+        }
+      }
+      return
+    }
+
+    // Reset suspended state for normal response
+    isSuspended.value = false
+
     if (res.code === 200 && res.data) {
       const newExpectNo = res.data.currExpectInfo?.expect_no || ''
 
@@ -2637,6 +2669,13 @@ const fetchExpectInfoData = async () => {
 
       if (currExpectInfo.value) {
         gameInfo.value.period = currExpectInfo.value.expect_no || ''
+        // Store server sync point for accurate countdown calculation
+        serverSyncTime.value = Date.now()
+        serverCountdowns.value = {
+          stop: currExpectInfo.value.close_countdown || 0,
+          draw: currExpectInfo.value.open_countdown || 0
+        }
+        // Set initial countdown values
         countdown.value = {
           stop: currExpectInfo.value.close_countdown || 0,
           draw: currExpectInfo.value.open_countdown || 0
@@ -2962,7 +3001,7 @@ const closeBettingPanel = () => {
 // Submit bet
 const submitBet = async () => {
   if (!activePlayGroup.value) {
-    alert('请选择玩法分组')
+    toast.warning('请选择玩法分组')
     return
   }
 
@@ -2980,15 +3019,15 @@ const submitBet = async () => {
   const total_gold = totalBetAmount.value
 
   if (!bet_expect_no) {
-    alert('期号信息获取失败')
+    toast.error('期号信息获取失败')
     return
   }
   if (total_gold <= 0) {
-    alert('请输入投注金额')
+    toast.warning('请输入投注金额')
     return
   }
   if (countdown.value.stop <= 0) {
-    alert('已封盘，无法投注')
+    toast.warning('已封盘，无法投注')
     return
   }
 
@@ -3006,7 +3045,7 @@ const submitBet = async () => {
     isSubmitting.value = true
     const res = await betGame(payload)
     if (res.code === 200) {
-      alert('投注成功')
+      toast.success('投注成功')
 
       const updated = { ...myBetAmounts.value }
       selectedPlays.value.forEach((playName) => {
@@ -3021,11 +3060,11 @@ const submitBet = async () => {
       playAmounts.value = {}
       activeQuick.value = null
     } else {
-      alert(res.message || '投注失败')
+      toast.error(res.message || '投注失败')
     }
   } catch (error) {
     console.error('投注失败：', error)
-    alert('投注失败，请重试')
+    toast.error('投注失败，请重试')
   } finally {
     isSubmitting.value = false
   }
@@ -3041,15 +3080,21 @@ const handleCancel = () => {
 // Flag to prevent multiple API calls when drawing
 const isWaitingForResult = ref(false)
 
-// Start countdown timer
+// Start countdown timer - uses server sync to calculate accurate countdown
 const startCountdownTimer = () => {
   if (countdownTimer) clearInterval(countdownTimer)
   countdownTimer = setInterval(async () => {
-    if (countdown.value.stop > 0) {
-      countdown.value.stop--
-    } else if (countdown.value.draw > 0) {
-      countdown.value.draw--
-    } else if (!isWaitingForResult.value) {
+    // Calculate elapsed seconds since server sync
+    const elapsedSeconds = Math.floor((Date.now() - serverSyncTime.value) / 1000)
+
+    // Calculate actual remaining time based on server sync point
+    const stopRemaining = Math.max(0, serverCountdowns.value.stop - elapsedSeconds)
+    const drawRemaining = Math.max(0, serverCountdowns.value.draw - elapsedSeconds)
+
+    countdown.value.stop = stopRemaining
+    countdown.value.draw = drawRemaining
+
+    if (stopRemaining <= 0 && drawRemaining <= 0 && !isWaitingForResult.value) {
       isWaitingForResult.value = true
       startResultPolling()
     }
@@ -3120,7 +3165,14 @@ onUnmounted(() => {
         <!-- Game Tab -->
         <div class="gametab">
           <div class="type-row">
-            <ul class="type-list">
+            <!-- Skeleton loading for games list -->
+            <ul class="type-list" v-if="isLoadingGames">
+              <li v-for="i in 6" :key="`skeleton-game-${i}`" class="type-item skeleton-item">
+                <Skeleton width="80px" height="20px" />
+              </li>
+            </ul>
+            <!-- Actual games list -->
+            <ul class="type-list" v-else>
               <li
                 v-for="game in allGames"
                 :key="game.id"
@@ -3135,7 +3187,16 @@ onUnmounted(() => {
             </ul>
           </div>
 
-          <div class="item-row" v-if="playGroups.length > 0">
+          <!-- Skeleton loading for play groups -->
+          <div class="item-row" v-if="isLoadingPlays">
+            <ul class="item-list">
+              <li v-for="i in 4" :key="`skeleton-group-${i}`" class="item-btn skeleton-item">
+                <Skeleton width="60px" height="18px" />
+              </li>
+            </ul>
+          </div>
+          <!-- Actual play groups -->
+          <div class="item-row" v-else-if="playGroups.length > 0">
             <ul class="item-list">
               <li
                 v-for="group in playGroups"
@@ -3166,7 +3227,10 @@ onUnmounted(() => {
                 <li class="info-item clock-item">
                   <span class="clock-text">
                     第<span class="clock-num">{{ gameInfo.period }}</span>期
-                    <template v-if="countdownStatus === 'betting'">
+                    <template v-if="countdownStatus === 'suspended'">
+                      <span class="countdown-suspended">停盘中...</span>
+                    </template>
+                    <template v-else-if="countdownStatus === 'betting'">
                       <span class="countdown-time">{{ countdownText }}</span>
                     </template>
                     <template v-else-if="countdownStatus === 'closing'">
@@ -3327,8 +3391,8 @@ onUnmounted(() => {
                 <thead>
                   <tr>
                     <th>期号</th>
-                    <th>开奖时间</th>
-                    <th>开奖结果</th>
+                    <th>结算时间</th>
+                    <th>是否自动</th>
                     <th>投注金币</th>
                     <th>中奖金币</th>
                     <th>盈亏</th>
@@ -3342,12 +3406,7 @@ onUnmounted(() => {
                     <td>{{ bet.no }}</td>
                     <td>{{ bet.drawTime }}</td>
                     <td>
-                      <template v-if="bet.isOpened">
-                        <span :class="['num-circle', getNumColorClass(String(bet.result).padStart(2, '0'))]">{{ bet.result }}</span>
-                      </template>
-                      <template v-else>
-                        <span class="not-drawn">-</span>
-                      </template>
+                      <span :class="bet.isAuto ? 'auto-yes' : 'auto-no'">{{ bet.isAuto ? '是' : '否' }}</span>
                     </td>
                     <td><span class="coin">{{ bet.betAmount }}</span></td>
                     <td><span class="coin">{{ bet.winAmount }}</span></td>
@@ -3995,7 +4054,10 @@ onUnmounted(() => {
               <div class="period-info-bar">
                 <div class="period-countdown">
                   第<span class="period-num">{{ gameInfo.period }}</span>期
-                  <template v-if="countdownStatus === 'betting'">
+                  <template v-if="countdownStatus === 'suspended'">
+                    <span class="time-red">停盘中...</span>
+                  </template>
+                  <template v-else-if="countdownStatus === 'betting'">
                     距<span class="time-red">{{ countdown.stop }}</span>秒停止竞猜
                   </template>
                   <template v-else-if="countdownStatus === 'closing'">
@@ -4281,6 +4343,16 @@ onUnmounted(() => {
   color: #FFF;
 }
 
+/* Skeleton item styles */
+.skeleton-item {
+  background: rgba(255, 255, 255, 0.5) !important;
+  border-color: transparent !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+}
+
 /* ==================== GAME CONTENT ==================== */
 .gamecontent {
   background: rgba(255,255,255,0.8);
@@ -4360,6 +4432,7 @@ onUnmounted(() => {
 .countdown-time { color: #006600; font-weight: bold; margin-left: 10px; }
 .countdown-time.closing { color: #ff6600; }
 .countdown-drawing { color: #cc0000; font-weight: bold; margin-left: 10px; }
+.countdown-suspended { color: #999999; font-weight: bold; margin-left: 10px; }
 .loading-gif { vertical-align: middle; margin-left: 5px; }
 
 .order-num { color: #ff3000; font-size: 28px; font-weight: 700; }
@@ -5468,32 +5541,75 @@ onUnmounted(() => {
   width: 40px;
   height: 40px;
   cursor: pointer;
-  transition: transform 0.1s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
 }
 
 .quick-bet-chip:hover {
-  transform: scale(1.1);
+  transform: scale(1.15) translateY(-2px);
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.25));
 }
 
 .quick-bet-chip:active {
   transform: scale(0.95);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
 }
 
 .submit-bet-btn {
-  background: #FFB800;
+  background: linear-gradient(135deg, #FFB800 0%, #FF9500 100%);
   color: #fff;
   border: none;
-  padding: 8px 20px;
-  border-radius: 3px;
+  padding: 10px 24px;
+  border-radius: 6px;
   cursor: pointer;
   font-size: 14px;
+  font-weight: bold;
   display: flex;
   align-items: center;
   gap: 5px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 4px rgba(255, 184, 0, 0.3);
+  position: relative;
+  overflow: hidden;
 }
 
-.submit-bet-btn:hover { background: #e6a600; }
-.submit-bet-btn:disabled { background: #ccc; cursor: not-allowed; }
+.submit-bet-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  transition: left 0.5s ease;
+}
+
+.submit-bet-btn:hover::before {
+  left: 100%;
+}
+
+.submit-bet-btn:hover {
+  background: linear-gradient(135deg, #FF9500 0%, #E68A00 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 184, 0, 0.4);
+}
+
+.submit-bet-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(255, 184, 0, 0.3);
+}
+
+.submit-bet-btn:disabled {
+  background: linear-gradient(135deg, #ccc 0%, #aaa 100%);
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.submit-bet-btn:disabled::before {
+  display: none;
+}
+
 .bet-icon { font-size: 14px; }
 
 /* Odds Table */
@@ -5537,9 +5653,32 @@ onUnmounted(() => {
   font-size: 12px;
   cursor: pointer;
   background: #9e9e9e;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  user-select: none;
 }
 
-.num-circle.selected { background: #ff9800; }
+.num-circle:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.num-circle:active {
+  transform: scale(0.95);
+}
+
+.num-circle.selected {
+  background: #ff9800;
+  animation: bet-select-pulse 0.3s ease;
+  box-shadow: 0 0 0 3px rgba(255, 152, 0, 0.3);
+}
+
+@keyframes bet-select-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
 
 /* Color classes for lottery result display */
 .num-green { background: #4CAF50; }
@@ -5554,6 +5693,18 @@ onUnmounted(() => {
   border-radius: 3px;
   text-align: center;
   font-size: 12px;
+  transition: all 0.2s ease;
+}
+
+.bet-input:focus {
+  border-color: #ff9800;
+  box-shadow: 0 0 0 2px rgba(255, 152, 0, 0.2);
+  outline: none;
+}
+
+.bet-input:not(:placeholder-shown) {
+  border-color: #ff9800;
+  background: #fff8e1;
 }
 
 .mult-x {
@@ -5625,6 +5776,15 @@ onUnmounted(() => {
 .mybet-table .not-drawn {
   color: #999;
   font-size: 16px;
+}
+
+.mybet-table .auto-yes {
+  color: #4CAF50;
+  font-weight: bold;
+}
+
+.mybet-table .auto-no {
+  color: #999;
 }
 
 .mybet-table .bet-status {

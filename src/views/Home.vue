@@ -739,18 +739,18 @@ const closePopup = () => {
           </ul>
           <ul class="day_list">
             <li class="top">
-              <dd class="col-rank">排名</dd>
-              <dd class="col-name">昵称</dd>
-              <dd class="col-score">乐豆</dd>
+              <div class="col-rank">排名</div>
+              <div class="col-name">昵称</div>
+              <div class="col-score">乐豆</div>
             </li>
             <li v-for="item in currentRankings" :key="`rank-${activeRankingTab}-${item.rank}`" class="rank-row">
-              <dd class="col-rank">
+              <div class="col-rank">
                 <span
                   :class="['rank-icon', item.rank === 1 ? 'one' : item.rank === 2 ? 'two' : item.rank === 3 ? 'three' : 'end']"
                 >{{ item.rank > 3 ? item.rank : '' }}</span>
-              </dd>
-              <dd class="col-name"><a href="javascript:void(0)">{{ item.user }}</a></dd>
-              <dd class="col-score">{{ formatNumber(item.amount) }}</dd>
+              </div>
+              <div class="col-name"><a href="javascript:void(0)">{{ item.user }}</a></div>
+              <div class="col-score">{{ formatNumber(item.amount) }}</div>
             </li>
           </ul>
           <!-- Pagination -->
@@ -1678,7 +1678,7 @@ const closePopup = () => {
   box-sizing: border-box;
 }
 
-.index_center .center_box .day_box ul.day_list li dd.col-rank {
+.index_center .center_box .day_box ul.day_list li .col-rank {
   width: 60px;
   text-align: center;
   display: flex;
@@ -1686,13 +1686,13 @@ const closePopup = () => {
   justify-content: center;
 }
 
-.index_center .center_box .day_box ul.day_list li dd.col-name {
+.index_center .center_box .day_box ul.day_list li .col-name {
   width: 100px;
   text-align: left;
   padding-left: 5px;
 }
 
-.index_center .center_box .day_box ul.day_list li dd.col-score {
+.index_center .center_box .day_box ul.day_list li .col-score {
   flex: 1;
   text-align: right;
   padding-right: 10px;
@@ -1739,11 +1739,11 @@ const closePopup = () => {
   background-size: 72px 30px;
 }
 
-.index_center .center_box .day_box ul.day_list li dd a {
+.index_center .center_box .day_box ul.day_list li a {
   color: #333;
 }
 
-.index_center .center_box .day_box ul.day_list li dd a:hover {
+.index_center .center_box .day_box ul.day_list li a:hover {
   color: #f03736;
 }
 

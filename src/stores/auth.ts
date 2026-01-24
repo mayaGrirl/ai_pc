@@ -20,9 +20,13 @@ export const useAuthStore = defineStore('auth', () => {
     hydrated.value = true
   }
 
-  function setCurrentCustomer(customer: CustomerField | null) {
-    currentCustomerData.value = customer
-  }
+  function setCurrentCustomer(payload: Partial<CustomerField>) {
+    if (!currentCustomerData.value) return
+
+    currentCustomerData.value = {
+      ...currentCustomerData.value,
+      ...payload
+    }  }
 
   async function fetchCurrentCustomer() {
     try {

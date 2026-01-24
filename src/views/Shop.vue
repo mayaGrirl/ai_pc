@@ -199,7 +199,7 @@ onMounted(() => {
             </button>
             <button class="bg-white rounded-xl px-6 py-[18px] flex justify-between items-center text-base font-medium
             text-[#333] transition-all duration-300 shadow-[0_2px_8px_rgba(0,0,0,0.1)] hover:-translate-y-[2px] hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)]"
-                    @click="router.push('/my-cards')">
+                    @click="router.push('/user/props')">
               <span>我的卡密</span>
               <i class="text-[24px] text-[#667eea] not-italic"><ChevronRight class='h-4 w-4' /></i>
             </button>
@@ -222,7 +222,7 @@ onMounted(() => {
                   />
                 </span>
               </div>
-              <a href="#" class="mt-1 text-[13px] text-[#667eea] no-underline hover:underline flex items-center">
+              <a href="/user/bank" class="mt-1 text-[13px] text-[#667eea] no-underline hover:underline flex items-center">
                 去存入 <ChevronRight class='h-4 w-4' />
               </a>
             </div>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import {computed} from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import MainLayout from './MainLayout.vue'
@@ -153,18 +153,18 @@ const handleRefresh = () => {
                   <div>存款</div>
                   <div><span class="coin">{{ formatNumber(customer?.bankpoints || 0) }}</span></div>
                 </li>
-                <li>
-                  <div>冻结</div>
-                  <div><span class="coin">{{ formatNumber(customer?.frozen || 0) }}</span></div>
-                </li>
+<!--                <li>-->
+<!--                  <div>冻结</div>-->
+<!--                  <div><span class="coin">{{ formatNumber(customer?.frozen || 0) }}</span></div>-->
+<!--                </li>-->
                 <li>
                   <div>生态值</div>
                   <div><span class="other">{{ customer?.experience || 0 }}</span></div>
                 </li>
-                <li>
-                  <div>积分</div>
-                  <div><span class="other">{{ customer?.blessing || 0 }}</span></div>
-                </li>
+<!--                <li>-->
+<!--                  <div>积分</div>-->
+<!--                  <div><span class="other">{{ customer?.blessing || 0 }}</span></div>-->
+<!--                </li>-->
               </ul>
             </div>
           </div>

@@ -328,6 +328,6 @@ export const packExchange = (data: PackExchangeDto): Promise<HttpRes<unknown>> =
 /**
  * 会员接受短信
  */
-export const customerReceiveSms = (): Promise<HttpRes<unknown>> => {
-  return http.get('/api/app/v1/customer/receive-sms', {})
+export const customerReceiveSms = (scene: string): Promise<HttpRes<unknown>> => {
+  return http.get('/api/app/v1/customer/receive-sms', {scene: scene})
 }

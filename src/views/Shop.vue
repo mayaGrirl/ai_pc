@@ -202,7 +202,7 @@ onMounted(() => {
           <div class="grid grid-cols-2 gap-4 max-md:grid-cols-1">
             <button class="bg-white rounded-xl px-6 py-[18px] flex justify-between items-center text-base font-medium
             text-[#333] transition-all duration-300 shadow-[0_2px_8px_rgba(0,0,0,0.1)] hover:-translate-y-[2px] hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)]"
-                    @click="router.push('/shop/records')">
+                    @click="router.push('/user/exchange')">
               <span>兑换记录</span>
               <i class="text-[24px] text-[#667eea] not-italic"><ChevronRight class='h-4 w-4' /></i>
             </button>

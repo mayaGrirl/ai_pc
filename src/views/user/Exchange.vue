@@ -1,159 +1,84 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import UserLayout from '@/components/layout/UserLayout.vue'
-import { cardRecords } from '@/api/shop'
-import { checkSecurityPass } from '@/api/customer'
-import type { CardRecordField } from '@/types/shop.type'
+import {useI18n} from "vue-i18n";
+import {LOCALE_CURRENCY_MAP} from "@/i18n";
+import {useTable} from "@/composables/useTable.ts";
+import {CardRecordField} from "@/types/shop.type.ts";
+import {depositRecords} from "@/api/customer.ts";
+import dayjs from "dayjs";
+import DataTable from "@/components/ui/DataTable.vue";
+import {useRouter} from "vue-router";
+import {ChevronLeft} from "lucide-vue-next";
+import UserLayout from "@/components/layout/UserLayout.vue";
 
-// 安全验证状态
-const verified = ref(false)
-const securityQuestion = ref('1')
-const answer = ref('')
-const verifying = ref(false)
+const {locale} = useI18n()
+const router = useRouter()
+// 币种符号
+const currency = LOCALE_CURRENCY_MAP[locale.value] ?? 'USD';
 
-// 安全问题列表
-const securityQuestions = [
-  { value: '1', label: '我父亲的姓名是什么?' },
-  { value: '2', label: '我母亲的姓名是什么?' },
-  { value: '3', label: '我的出生地是哪里?' },
-  { value: '4', label: '我的小学名称是什么?' },
-  { value: '5', label: '我最喜欢的颜色是什么?' }
+// 初始化表格
+const {
+  loading,
+  dataSource,
+  hasMore,
+  pagination,
+  loadData,
+  changePage,
+} = useTable<CardRecordField>(depositRecords, {
+  defaultSize: 10,
+  initQuery: {type: 14}
+})
+
+// 列配置
+const columns = [
+  { key: 'created_at', title: '兑换时间', width: '20%', align: 'center' as const },
+  { key: 'deposit', title: '扣除金豆', width: '15%', align: 'center' as const },
+  { key: 'a_deposit', title: '银行余额', width: '15%', align: 'center' as const },
 ]
 
-// 兑奖记录
-const records = ref<CardRecordField[]>([])
-const loading = ref(false)
-const currentPage = ref(1)
-const pageSize = ref(20)
-
-// 验证密保问题
-const handleSubmit = async () => {
-  if (!answer.value.trim()) {
-    alert('请输入答案')
-    return
-  }
-
-  verifying.value = true
-  try {
-    const res = await checkSecurityPass({
-      safe_ask: securityQuestion.value,
-      answer: answer.value
-    })
-    if (res.code === 200) {
-      verified.value = true
-      loadRecords()
-    } else {
-      alert(res.message || '验证失败')
-    }
-  } catch (error) {
-    alert('验证失败')
-  } finally {
-    verifying.value = false
-  }
-}
-
-// 加载兑奖记录
-const loadRecords = async () => {
-  loading.value = true
-  try {
-    const res = await cardRecords({
-      pagination: { page: currentPage.value, size: pageSize.value }
-    })
-    if (res.code === 200 && res.data) {
-      records.value = res.data
-    }
-  } catch (error) {
-    console.error('加载兑奖记录失败', error)
-  } finally {
-    loading.value = false
-  }
-}
-
-// 格式化时间
-const formatTime = (timestamp: number | undefined) => {
-  if (!timestamp) return '-'
-  const date = new Date(timestamp * 1000)
-  return date.toLocaleString('zh-CN')
-}
-
-// 格式化数字
-const formatNumber = (num: number | undefined) => {
-  if (num === undefined) return '0'
-  return num.toLocaleString()
-}
-
-onMounted(() => {
-  // 如果不需要密保验证可以直接加载
-  // loadRecords()
-})
+loadData();
 </script>
 
 <template>
   <UserLayout>
     <div class="exchange-page">
       <!-- 页面标签 -->
-      <div class="page-tabs">
-        <span class="tab active">兑奖记录</span>
+      <div class="flex gap-5 border-b border-[#eee] pb-[15px]">
+        <span class="text-sm cursor-pointer pb-3 border-b-2 border-transparent -mb-4 text-[#ff6600] border-b-[#ff6600]">兑奖记录</span>
       </div>
 
-      <!-- 未验证时显示安全验证表单 -->
-      <div v-if="!verified" class="security-verify">
-        <div class="verify-notice">
-          <span class="notice-icon">!</span>
-          你需要通过密保验证后才能查看这个页面!
-        </div>
+      <div class="min-h-[calc(100vh-120px)] px-5 pb-10">
+        <div class="max-w-[1400px] mx-auto  items-start max-[1200px]:grid-cols-1 max-[1200px]:max-w-[600px]">
+          <!-- 表格 -->
+          <DataTable
+            :columns="columns"
+            :data="dataSource"
+            :loading="loading"
+            :pagination="pagination"
+            @change="changePage"
+            :hasMore="hasMore"
+          >
+            <!-- 金豆列自定义 -->
+            <template #column-points="{ row }">
+              <div class="text-orange-600 font-bold">
+                {{ $n(row.points) }}
+                <img
+                  alt="coin"
+                  class="inline-block w-[13px] h-[13px]"
+                  src="/ranking/coin.png"
+                />
+              </div>
+              <div class="text-xs">{{$n((row.points || 0) / 1000, {
+                style: 'currency',
+                currency: currency
+              })}}</div>
+            </template>
 
-        <div class="verify-form">
-          <div class="form-row">
-            <label class="form-label">安全问题</label>
-            <select v-model="securityQuestion" class="form-select">
-              <option v-for="q in securityQuestions" :key="q.value" :value="q.value">{{ q.label }}</option>
-            </select>
-          </div>
-          <div class="form-row">
-            <label class="form-label">答案</label>
-            <input type="text" v-model="answer" class="form-input" placeholder="请输入答案" />
-          </div>
-          <div class="form-row">
-            <label class="form-label"></label>
-            <button class="btn-submit" @click="handleSubmit" :disabled="verifying">
-              {{ verifying ? '验证中...' : '提交' }}
-            </button>
-          </div>
-        </div>
-      </div>
+            <!-- 时间列自定义 -->
+            <template #column-addtime="{ row }">
+              <span class="text-gray-400 text-xs">{{ dayjs.unix(row.addtime || 0).format("YYYY-MM-DD HH:mm") }}</span>
+            </template>
 
-      <!-- 验证后显示兑奖记录 -->
-      <div v-else class="exchange-content">
-        <div v-if="loading" class="loading-state">加载中...</div>
-        <div v-else class="exchange-table">
-          <table>
-            <thead>
-              <tr>
-                <th>卡号</th>
-                <th>卡密</th>
-                <th>类型</th>
-                <th>金豆</th>
-                <th>手续费</th>
-                <th>状态</th>
-                <th>兑换时间</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="record in records" :key="record.id">
-                <td>{{ record.no || '-' }}</td>
-                <td>{{ record.pwd || '-' }}</td>
-                <td>{{ record.type_label || '-' }}</td>
-                <td class="coin">{{ formatNumber(record.points) }}</td>
-                <td>{{ formatNumber(record.sxf) }}</td>
-                <td :class="['status', record.state === 1 ? 'done' : '']">{{ record.state_label || '-' }}</td>
-                <td class="time">{{ formatTime(record.addtime) }}</td>
-              </tr>
-              <tr v-if="records.length === 0">
-                <td colspan="7" class="empty-cell">暂无兑奖记录</td>
-              </tr>
-            </tbody>
-          </table>
+          </DataTable>
         </div>
       </div>
     </div>

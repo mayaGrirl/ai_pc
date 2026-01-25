@@ -1,254 +1,190 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import {computed, onMounted, ref} from 'vue'
 import UserLayout from '@/components/layout/UserLayout.vue'
+import {useAuthStore} from "@/stores";
+import {SAFE_QUESTION_OPTIONS} from "@/constants/constants.ts";
+import {ErrorMessage, useField, useForm} from "vee-validate";
+import ReceiveSmsInput from "@/components/receive-sms.vue";
+import {z} from "zod";
+import {toTypedSchema} from "@vee-validate/zod";
+import {checkSecurityPass} from "@/api/customer.ts";
+import {useToast} from "@/composables/useToast.ts";
+import {getSecureToken, setSecureToken} from "@/utils/verify-key.ts";
+import PropsRecord from "@/views/user/components/PropsRecord.vue";
 
-// 安全验证状态
-const verified = ref(false)
-const securityQuestion = ref('我父亲的姓名是什么?')
-const answer = ref('')
+const toast = useToast()
+const authStore = useAuthStore()
+const customer = computed(() => authStore.currentCustomer);
 
-// 安全问题列表
-const securityQuestions = [
-  '我父亲的姓名是什么?',
-  '我母亲的姓名是什么?',
-  '我的出生地是哪里?',
-  '我的小学名称是什么?',
-  '我最喜欢的颜色是什么?'
-]
+// 验证状态
+const verified = ref<boolean>(false);
 
-// 道具列表
-interface Prop {
-  id: number
-  name: string
-  type: string
-  count: number
-  expireTime: string
-}
-
-const props = ref<Prop[]>([])
-
-const handleSubmit = () => {
-  if (!answer.value.trim()) {
-    alert('请输入答案')
-    return
+const formKey = ref<number>(1);
+const schema = z.object({
+  safe_ask: z.string().optional(),
+  answer: z.string().optional(),
+  verify_code: z.string().optional(),
+}).superRefine((data, ctx) => {
+  // 密保问题
+  if (customer.value?.selectcardVerifyType == 'safeQuestion') {
+    if (!data.safe_ask || data.safe_ask.length < 1) {
+      ctx.addIssue({
+        path: ["safe_ask"],
+        message: '请选择密保问题',
+        code: "custom",
+      });
+    }
+    if (!data.answer || data.answer.length < 1) {
+      ctx.addIssue({
+        path: ["answer"],
+        message: '请输入答案',
+        code: "custom",
+      });
+    }
+    if (data.answer && data.answer.length > 50) {
+      ctx.addIssue({
+        path: ["answer"],
+        message: '答案不能超过50字符',
+        code: "custom",
+      });
+    }
   }
-  // 模拟验证成功
-  verified.value = true
-}
+  // 验证码
+  if (customer?.value?.selectcardVerifyType == 'smsVerify') {
+    if (!data.verify_code || data.verify_code.length < 1) {
+      ctx.addIssue({
+        path: ["verify_code"],
+        message: '请输入验证码',
+        code: 'custom',
+      })
+    }
+  }
+});
+type FormValues = z.infer<typeof schema>;
+const validationSchema = toTypedSchema(schema);
+const {
+  handleSubmit,
+  isSubmitting,
+} = useForm<FormValues>({
+  validationSchema: validationSchema,
+  initialValues: {
+    safe_ask: "",
+  }
+})
+const {value: safeAsk} = useField<string>('safe_ask')
+const {value: answer} = useField<string>('answer')
+const {value: verifyCode} = useField<string>('verify_code')
+// 提交表单
+const submitExchange = handleSubmit(async (values, {setErrors}) => {
+  isSubmitting.value = true
+
+  try {
+    const {code, message, data} = await checkSecurityPass({
+      safe_ask: values?.safe_ask,
+      answer: values?.answer,
+      verify_code: values?.verify_code,
+    })
+
+    if (code !== 200) {
+      toast.error(message);
+    } else {
+      toast.success('验证成功');
+
+      verified.value = true;
+      setSecureToken(data.key, 480);
+    }
+  } catch (error: any) {
+    toast.error(error.message || '提交失败')
+  } finally {
+    isSubmitting.value = false
+  }
+})
+
+onMounted(() => {
+  // 查看卡密列表保持
+  const init = async () => {
+    try {
+      verified.value = !!getSecureToken();
+    } catch {
+      verified.value = false;
+    }
+  }
+  void init();
+})
 </script>
 
 <template>
   <UserLayout>
-    <div class="props-page">
+    <div class="flex flex-col gap-5">
       <!-- 页面标签 -->
-      <div class="page-tabs">
-        <span class="tab active">我的道具</span>
+      <div class="flex gap-5 border-b border-[#eee] pb-[15px]">
+        <span class="text-sm cursor-pointer pb-3 border-b-2 border-transparent -mb-4 text-[#ff6600] border-b-[#ff6600]">我的道具</span>
       </div>
 
-      <!-- 未验证时显示安全验证表单 -->
-      <div v-if="!verified" class="security-verify">
-        <div class="verify-notice">
-          <span class="notice-icon">!</span>
-          你需要通过密保验证后才能查看这个页面!
+      <!-- 验证-->
+      <form @submit.prevent="submitExchange" class="flex flex-col gap-6" :key="formKey" v-if="!verified">
+        <!-- 验证码 -->
+        <div class="flex gap-[1px] flex-col" v-if="customer?.selectcardVerifyType == 'smsVerify'">
+          <label class="text-[15px] font-medium text-[#333333]" for="verify_code">验证码</label>
+          <div class="relative flex items-center gap-1">
+            <ReceiveSmsInput
+              scene="exchange_card"
+              v-model="verifyCode"
+            />
+          </div>
+          <ErrorMessage name="verify_code" class="text-[#ff4d4f] text-sm"/>
         </div>
 
-        <div class="verify-form">
-          <div class="form-row">
-            <label class="form-label">安全问题</label>
-            <select v-model="securityQuestion" class="form-select">
-              <option v-for="q in securityQuestions" :key="q" :value="q">{{ q }}</option>
-            </select>
+        <!-- 密保 -->
+        <div v-if="customer?.selectcardVerifyType == 'safeQuestion'">
+          <div class="flex gap-[1px] flex-col">
+            <label class="text-[15px] font-medium text-[#333333]" for="safe_ask">验证码</label>
+            <div class="relative flex items-center gap-1">
+              <select id="safe_ask"
+                      v-model="safeAsk"
+                      class="px-4 py-[14px] border-2 border-gray-200 rounded-lg text-[15px] transition-all
+                    duration-300 outline-none focus:border-[#667eea] focus:shadow-[0_0_0_3px_rgba(102,126,234,0.1)]
+                    flex-1 min-w-0 text-gray-600 placeholder-gray-400 focus:outline-none">
+                <option key="option-default" value="">请选择问题</option>
+                <option v-for="item in SAFE_QUESTION_OPTIONS" :key="`option-${item.value}`"
+                        :value="String(item.value)">
+                  {{ $t(item.i18nKey) }}
+                </option>
+              </select>
+            </div>
+            <ErrorMessage name="safe_ask" class="text-[#ff4d4f] text-sm"/>
           </div>
-          <div class="form-row">
-            <label class="form-label">答案</label>
-            <input type="text" v-model="answer" class="form-input" placeholder="" />
-          </div>
-          <div class="form-row">
-            <label class="form-label"></label>
-            <button class="btn-submit" @click="handleSubmit">提交</button>
+          <div class="flex gap-[1px] flex-col">
+            <label class="text-[15px] font-medium text-[#333333]" for="answer">答案</label>
+            <div class="relative flex items-center gap-1">
+              <input
+                id="answer"
+                type="text"
+                v-model="answer"
+                placeholder="请输入答案"
+                class="px-4 py-[14px] border-2 border-gray-200 rounded-lg text-[15px] transition-all
+                    duration-300 outline-none focus:border-[#667eea] focus:shadow-[0_0_0_3px_rgba(102,126,234,0.1)]
+                    flex-1 min-w-0 text-gray-600 placeholder-gray-400 focus:outline-none"
+                autocomplete="off"
+                spellcheck="false"/>
+            </div>
+            <ErrorMessage name="answer" class="text-[#ff4d4f] text-sm"/>
           </div>
         </div>
-      </div>
 
-      <!-- 验证后显示道具列表 -->
-      <div v-else class="props-content">
-        <div class="props-table">
-          <table>
-            <thead>
-              <tr>
-                <th>道具名称</th>
-                <th>道具类型</th>
-                <th>数量</th>
-                <th>过期时间</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="prop in props" :key="prop.id">
-                <td>{{ prop.name }}</td>
-                <td>{{ prop.type }}</td>
-                <td>{{ prop.count }}</td>
-                <td>{{ prop.expireTime }}</td>
-                <td><button class="btn-use">使用</button></td>
-              </tr>
-              <tr v-if="props.length === 0">
-                <td colspan="5" class="empty-cell">暂无道具</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+        <!-- 提交按钮 -->
+        <button type="submit"
+                :disabled="isSubmitting"
+                class="mt-4 p-4 bg-gradient-to-br from-[#ff6b6b] to-[#ee5a6f] text-white
+                      rounded-xl text-[18px] font-bold cursor-pointer transition-all duration-300 shadow-[0_4px_12px_rgba(255,107,107,0.3)]
+                      hover:-translate-y-[2px] hover:shadow-[0_6px_16px_rgba(255,107,107,0.4)] active:translate-y-0 disabled:opacity-60
+                      disabled:cursor-not-allowed">
+          {{ isSubmitting ? '提交中...' : '提交' }}
+        </button>
+      </form>
+
+      <!-- 验证后显示列表 -->
+      <div v-else><PropsRecord /></div>
     </div>
   </UserLayout>
 </template>
-
-<style scoped>
-.props-page {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.page-tabs {
-  display: flex;
-  border-bottom: 2px solid #ff6600;
-}
-
-.page-tabs .tab {
-  font-size: 14px;
-  color: #ff6600;
-  padding: 10px 20px;
-  background: #fff8f0;
-  border: 1px solid #ff6600;
-  border-bottom: none;
-  margin-bottom: -2px;
-}
-
-/* 安全验证 */
-.security-verify {
-  padding: 40px 0;
-}
-
-.verify-notice {
-  text-align: center;
-  color: #ff6600;
-  font-size: 14px;
-  margin-bottom: 30px;
-}
-
-.notice-icon {
-  display: inline-block;
-  width: 18px;
-  height: 18px;
-  line-height: 18px;
-  text-align: center;
-  border: 1px solid #ff6600;
-  border-radius: 50%;
-  margin-right: 8px;
-  font-size: 12px;
-}
-
-.verify-form {
-  max-width: 400px;
-  margin: 0 auto;
-}
-
-.form-row {
-  display: flex;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.form-label {
-  width: 80px;
-  text-align: right;
-  font-size: 14px;
-  color: #333;
-  margin-right: 15px;
-}
-
-.form-select,
-.form-input {
-  flex: 1;
-  height: 38px;
-  padding: 0 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-  color: #333;
-}
-
-.form-select:focus,
-.form-input:focus {
-  outline: none;
-  border-color: #ff6600;
-}
-
-.btn-submit {
-  width: 200px;
-  height: 40px;
-  background: linear-gradient(135deg, #ff6600, #ff8533);
-  border: none;
-  border-radius: 4px;
-  color: #fff;
-  font-size: 14px;
-  cursor: pointer;
-  transition: opacity 0.2s;
-}
-
-.btn-submit:hover {
-  opacity: 0.9;
-}
-
-/* 道具表格 */
-.props-table {
-  border: 1px solid #eee;
-}
-
-.props-table table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.props-table th,
-.props-table td {
-  padding: 12px 15px;
-  text-align: center;
-  border-bottom: 1px solid #f0f0f0;
-  font-size: 13px;
-}
-
-.props-table th {
-  background: #fafafa;
-  color: #666;
-  font-weight: normal;
-}
-
-.props-table td {
-  color: #333;
-}
-
-.props-table tr:hover td {
-  background: #fafafa;
-}
-
-.btn-use {
-  padding: 4px 12px;
-  background: #ff6600;
-  border: none;
-  border-radius: 4px;
-  color: #fff;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.btn-use:hover {
-  opacity: 0.9;
-}
-
-.empty-cell {
-  text-align: center;
-  color: #999;
-  padding: 40px 0;
-}
-</style>

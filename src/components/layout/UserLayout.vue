@@ -67,7 +67,7 @@ const handleRefresh = () => {
               <li class="left_gktop_l">
                 <div class="left_gktop_lk">
                   <div class="hoverlay">修改头像</div>
-                  <img :src="customer?.avatar || '/head/m-1.gif'" width="70" height="70">
+                  <img :src="customer?.avatar_url || '/head/m-1.gif'" width="70" height="70">
                 </div>
               </li>
               <li class="left_gktop_r">

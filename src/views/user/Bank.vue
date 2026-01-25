@@ -160,7 +160,7 @@ onMounted(() => {
 
         <!-- 兑换金额 -->
         <div class="flex gap-[1px] flex-col">
-          <label class="text-[15px] font-medium text-[#333333]" for="amount">金额</label>
+          <label class="text-[15px] font-medium text-[#333333]" for="amount">金豆</label>
           <div class="relative flex items-center">
             <input
               type="number"

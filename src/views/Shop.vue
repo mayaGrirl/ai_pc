@@ -338,8 +338,9 @@ onMounted(() => {
               <!-- 手续费 -->
               <div class="flex gap-[1px] flex-col">
                 <label class="text-[15px] font-medium text-[#333333]">手续费</label>
-                <div class="flex items-center gap-2 px-4 py-[14px] bg-gray-50 rounded-lg border-2 border-gray-200">
+                <div class="relative flex items-center gap-2 px-4 py-[14px] bg-gray-50 rounded-lg border-2 border-gray-200">
                   <span class="text-lg font-bold text-[#333]">{{ serviceFee }}</span>
+                  <span class="absolute right-4 text-[#666] text-[15px]">元</span>
                 </div>
               </div>
 

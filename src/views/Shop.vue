@@ -129,7 +129,7 @@ const {
   }
 })
 // 字段注册
-const {value: amount} = useField<number>('amount')
+const {value: amount, errorMessage: amountError, meta: amountMeta} = useField<number>('amount')
 const {value: safeAsk} = useField<string>('safe_ask')
 const {value: answer} = useField<string>('answer')
 const {value: verifyCode} = useField<string>('verify_code')
@@ -145,7 +145,8 @@ const discountedBeans = computed(() => {
 const serviceFee = computed(() => {
   if (amount.value > 0) {
     const _p = amount.value * exchangeRate
-    return new Decimal(_p).sub(exemptCommissionBankPoints.value).mul(0.02).div(1000).ceil().toNumber()
+    const base = Math.max(0, _p - exemptCommissionBankPoints.value)
+    return new Decimal(base).mul(0.02).div(1000).ceil().toNumber();
   }
   return 0
 })
@@ -175,6 +176,15 @@ const submitExchange = handleSubmit(async (values, {setErrors}) => {
   } finally {
     isSubmitting.value = false
   }
+})
+
+// 是否允许发送验证码
+const canSendSms = computed(() => {
+  return (
+    amountMeta.valid &&        // 金额校验通过
+    !!amount.value &&          // 有值
+    !isSubmitting.value        // 非提交中
+  )
 })
 
 onMounted(() => {
@@ -340,6 +350,7 @@ onMounted(() => {
                   <ReceiveSmsInput
                     scene="exchange_card"
                     v-model="verifyCode"
+                    :disabled="!canSendSms"
                   />
                 </div>
                 <ErrorMessage name="verify_code" class="text-[#ff4d4f] text-sm"/>

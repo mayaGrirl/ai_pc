@@ -185,15 +185,14 @@ onMounted(() => {
 <template>
   <MainLayout>
     <div class="min-h-[calc(100vh-120px)] px-5 py-10">
-      <div
-        class="max-w-[1400px] mx-auto grid grid-cols-[1fr_500px] gap-[30px] items-start max-[1200px]:grid-cols-1 max-[1200px]:max-w-[600px]">
+      <div class="max-w-[1400px] mx-auto grid grid-cols-[1fr_500px] gap-[30px] items-start max-[1200px]:grid-cols-1 max-[1200px]:max-w-[600px]">
         <!-- 左侧：账户信息区域 -->
         <div class="flex flex-col gap-6">
           <!-- 顶部导航按钮 -->
           <div class="grid grid-cols-2 gap-4 max-md:grid-cols-1">
             <button class="bg-white rounded-xl px-6 py-[18px] flex justify-between items-center text-base font-medium
             text-[#333] transition-all duration-300 shadow-[0_2px_8px_rgba(0,0,0,0.1)] hover:-translate-y-[2px] hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)]"
-                    @click="router.push('/exchange-history')">
+                    @click="router.push('/shop/records')">
               <span>兑换记录</span>
               <i class="text-[24px] text-[#667eea] not-italic"><ChevronRight class='h-4 w-4' /></i>
             </button>

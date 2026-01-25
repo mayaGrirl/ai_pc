@@ -46,6 +46,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '兑换奖品' }
   },
   {
+    path: '/shop/records',
+    name: 'Shop Records',
+    component: () => import('@/views/ShopRecord.vue'),
+    meta: { title: '兑换记录' }
+  },
+  {
     path: '/promotion',
     name: 'Promotion',
     component: () => import('@/views/Promotion.vue'),

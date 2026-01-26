@@ -82,7 +82,7 @@ const handleRefresh = () => {
               </li>
               <li class="left_gktop_r">
                 <div class="left_gktop_fk">
-                  <p class="leftnc_bt">{{ customer?.nickname || '_sg' + customer?.id }}</p>
+                  <p class="leftnc_bt">{{ customer?.nickname || '_sg' + (customer?.id || '-') }}</p>
                   <p>ID：<span>{{ customer?.id }}</span></p>
                   <p><a href="javascript:void(0)" @click="handleRefresh">[刷新]</a></p>
                 </div>

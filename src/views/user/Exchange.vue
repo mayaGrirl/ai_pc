@@ -6,7 +6,6 @@ import {CardRecordField} from "@/types/shop.type.ts";
 import {depositRecords} from "@/api/customer.ts";
 import dayjs from "dayjs";
 import DataTable from "@/components/ui/DataTable.vue";
-import {useRouter} from "vue-router";
 import UserLayout from "@/components/layout/UserLayout.vue";
 
 const {locale} = useI18n()

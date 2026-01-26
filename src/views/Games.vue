@@ -838,7 +838,13 @@ const handleQuickSelect = (type: string) => {
     selectedPlays.value = []
     playAmounts.value = {}
     activeQuick.value = null
+    selectedMultiplier.value = null
     return
+  }
+
+  // Reset multiplier when switching quick select buttons
+  if (exclusiveButtons.includes(type)) {
+    selectedMultiplier.value = null
   }
 
   // Get group config based on group ID

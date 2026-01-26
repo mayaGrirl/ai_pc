@@ -1,15 +1,17 @@
 <script setup lang="ts">
+import UserLayout from "@/components/layout/UserLayout.vue";
+import dayjs from "dayjs";
+import DataTable from "@/components/ui/DataTable.vue";
 import {useI18n} from "vue-i18n";
+import {useRouter} from "vue-router";
 import {LOCALE_CURRENCY_MAP} from "@/i18n";
 import {useTable} from "@/composables/useTable.ts";
 import {CardRecordField} from "@/types/shop.type.ts";
 import {depositRecords} from "@/api/customer.ts";
-import dayjs from "dayjs";
-import DataTable from "@/components/ui/DataTable.vue";
-import {useRouter} from "vue-router";
-import UserLayout from "@/components/layout/UserLayout.vue";
+import {agentLogRecord} from "@/api/agent.ts";
 
 const {locale} = useI18n()
+const router = useRouter()
 // 币种符号
 const currency = LOCALE_CURRENCY_MAP[locale.value] ?? 'USD';
 
@@ -21,16 +23,18 @@ const {
   pagination,
   loadData,
   changePage,
-} = useTable<CardRecordField>(depositRecords, {
+} = useTable<CardRecordField>(agentLogRecord, {
   defaultSize: 10,
   initQuery: {type: 14}
 })
 
 // 列配置
 const columns = [
-  { key: 'created_at', title: '兑换时间', width: '20%', align: 'center' as const },
-  { key: 'deposit', title: '扣除金豆', width: '15%', align: 'center' as const },
-  { key: 'a_deposit', title: '银行余额', width: '15%', align: 'center' as const },
+  { key: 'type_label', title: '操作类型', width: '15%', align: 'center' as const },
+  { key: 'points', title: '金豆', width: '15%', align: 'center' as const },
+  { key: 'totalpoints', title: '金豆余额', width: '15%', align: 'center' as const },
+  { key: 'addtime', title: '操作时间', width: '15%', align: 'center' as const },
+  { key: 'content', title: '内容', width: '20%', align: 'center' as const },
 ]
 
 loadData();
@@ -41,7 +45,7 @@ loadData();
     <div class="flex flex-col gap-5">
       <!-- 页面标签 -->
       <div class="flex gap-5 border-b border-[#eee] pb-[15px]">
-        <span class="text-sm cursor-pointer pb-3 border-b-2 border-transparent -mb-4 text-[#ff6600] border-b-[#ff6600]">兑奖记录</span>
+        <span class="text-sm cursor-pointer pb-3 border-b-2 border-transparent -mb-4 text-[#ff6600] border-b-[#ff6600]">操作日志</span>
       </div>
 
       <div class="min-h-[calc(100vh-120px)]">
@@ -61,7 +65,7 @@ loadData();
                 {{ $n(row.points) }}
                 <img
                   alt="coin"
-                  class="inline-block w-[13px] h-[13px]"
+                  class="inline-block w-[10px] h-[10px]"
                   src="/ranking/coin.png"
                 />
               </div>

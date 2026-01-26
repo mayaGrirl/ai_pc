@@ -195,7 +195,38 @@ const routes: RouteRecordRaw[] = [
     name: 'NotFound',
     component: () => import('@/views/NotFound.vue'),
     meta: { title: '404' }
-  }
+  },
+
+  {
+    path: '/agent/recharge',
+    name: 'AgentRecharge',
+    component: () => import('@/views/agent/recharge.vue'),
+    meta: { title: '代理充值', requiresAuth: true }
+  },
+  {
+    path: '/agent/profile',
+    name: 'AgentProfile',
+    component: () => import('@/views/agent/profile.vue'),
+    meta: { title: '代理资料', requiresAuth: true }
+  },
+  {
+    path: '/agent/conversion',
+    name: 'AgentConversion',
+    component: () => import('@/views/agent/conversion.vue'),
+    meta: { title: '额度转换', requiresAuth: true }
+  },
+  {
+    path: '/agent/log',
+    name: 'AgentLog',
+    component: () => import('@/views/agent/log.vue'),
+    meta: { title: '操作日志', requiresAuth: true }
+  },
+  {
+    path: '/agent/recycle',
+    name: 'AgentRecycle',
+    component: () => import('@/views/agent/recycle.vue'),
+    meta: { title: '回收体验卡', requiresAuth: true }
+  },
 ]
 
 const router = createRouter({

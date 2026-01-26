@@ -48,11 +48,11 @@ const tabs = [
 const switchTab = (key: string) => {
   activeTab.value = key
   if (key === 'account') {
-    loadData();
+    loadData(true);
   }
 
   if (key === 'income' && !bankTable.dataSource.value.length) {
-    bankTable.loadData()
+    bankTable.loadData(true)
   }
 }
 loadData()

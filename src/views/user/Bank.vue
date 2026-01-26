@@ -73,7 +73,7 @@ const {value: amount} = useField<number>('amount')
 const {value: pay_password} = useField<string>('pay_password')
 
 // 提交表单
-const submitExchange = handleSubmit(async (values, {setErrors}) => {
+const submitExchange = handleSubmit(async (values) => {
   isSubmitting.value = true
 
   try {

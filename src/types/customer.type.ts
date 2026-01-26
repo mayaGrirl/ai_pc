@@ -87,6 +87,7 @@ export interface CustomerField {
   frozen?: number | null;
   experience?: number;
   blessing?: number;
+  is_agent?: boolean;
 }
 
 // 会员明细

@@ -1,5 +1,14 @@
 <script setup lang="ts">
 import MainLayout from '@/components/layout/MainLayout.vue'
+
+const goRecharge = () => {
+  // 新窗口打开（更安全，不丢当前页面）
+  window.open(
+    'https://www.oklink.com/zh-hans/tron/address/TGgn1DWgpQGhJsyn8s9hzvngCaDjHrDwHz',
+    '_blank'
+  )
+}
+
 </script>
 
 <template>
@@ -40,8 +49,7 @@ import MainLayout from '@/components/layout/MainLayout.vue'
           </div>
 
           <div class="action-section">
-            <button class="btn-primary">立即充值</button>
-            <button class="btn-secondary">查看教程</button>
+            <button class="btn-primary"  @click="goRecharge" >前往充值</button>
           </div>
         </div>
       </div>

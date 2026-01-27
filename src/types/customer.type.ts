@@ -87,6 +87,7 @@ export interface CustomerField {
   frozen?: number | null;
   experience?: number;
   blessing?: number;
+  is_agent?: boolean;
 }
 
 // 会员明细
@@ -277,6 +278,7 @@ export interface SignInRecord {
   reward_points: number;
   reward_base_coin: number;
   created_at: string;
+  member_field?: MemberField;
 }
 
 // 签到记录字段（别名）

@@ -104,7 +104,7 @@ const handlePageNext = (page: number) => {
               v-for="col in columns"
               :key="col.key"
               :class="[
-                'px-6 py-4 text-sm text-gray-600 whitespace-nowrap',
+                'px-4 py-2 text-sm text-gray-600 whitespace-nowrap',
                 col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : 'text-left'
               ]"
             >
@@ -120,6 +120,7 @@ const handlePageNext = (page: number) => {
     <!-- 分页 -->
     <div
       class="flex items-center justify-between mt-4 px-2"
+      v-if="showPagination"
     >
       <div class="flex items-center gap-2">
         <button

@@ -1,0 +1,1 @@
+function n(e,t=300){const r={token:e,expire:Date.now()+t*1e3};localStorage.setItem("secure_verify_token",JSON.stringify(r))}function o(){const e=localStorage.getItem("secure_verify_token");if(!e)return null;const t=JSON.parse(e);return Date.now()>t.expire?(localStorage.removeItem("secure_verify_token"),null):t.token}export{o as g,n as s};

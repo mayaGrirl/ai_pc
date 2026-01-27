@@ -11,6 +11,16 @@ const authStore = useAuthStore()
 const customer = computed(() => authStore.currentCustomer)
 
 // Menu items based on original template
+const agentMenuItems = [
+  { name: '代理充值', path: '/agent/recharge', key: 'agent-recharge' },
+  { name: '回收体验卡', path: '/agent/recycle', key: 'agent-recycle' },
+  { name: '额度转换', path: '/agent/conversion', key: 'agent-conversion' },
+  { name: '代理资料', path: '/agent/profile', key: 'agent-profile' },
+  { name: '操作日志', path: '/agent/log', key: 'agent-log' },
+  // { name: '统计信息', path: '/agent/stat', key: 'agent-stat' }
+]
+
+// Menu items based on original template
 const accountMenuItems = [
   { name: '我的消息', path: '/user/messages', key: 'mymessage' },
   { name: '我的工资', path: '/user/salary', key: 'salary' },
@@ -57,13 +67,13 @@ const handleRefresh = () => {
 
 <template>
   <MainLayout>
-    <div class="doc">
-      <div class="myaccount">
+    <div class="w-[1200px] mx-auto py-5">
+      <div class="w-full flex overflow-hidden">
         <!-- Left Sidebar -->
-        <div class="account_leftt">
+        <div class="w-[238px] float-left">
           <!-- User Profile Top -->
-          <div class="account_left_gktop">
-            <ul>
+          <div class="w-[238px] bg-white border border-[#e8e8e8] py-[15px] mb-[10px]">
+            <ul class="list-none p-0 m-0 flex items-center justify-center">
               <li class="left_gktop_l">
                 <div class="left_gktop_lk">
                   <div class="hoverlay">修改头像</div>
@@ -72,7 +82,7 @@ const handleRefresh = () => {
               </li>
               <li class="left_gktop_r">
                 <div class="left_gktop_fk">
-                  <p class="leftnc_bt">{{ customer?.nickname || '_sg' + customer?.id }}</p>
+                  <p class="leftnc_bt">{{ customer?.nickname || '_sg' + (customer?.id || '-') }}</p>
                   <p>ID：<span>{{ customer?.id }}</span></p>
                   <p><a href="javascript:void(0)" @click="handleRefresh">[刷新]</a></p>
                 </div>
@@ -82,6 +92,24 @@ const handleRefresh = () => {
 
           <!-- Menu Section -->
           <div class="account_left">
+            <!-- Agent Section -->
+            <div class="account_left_top" v-if="customer?.is_agent">
+              <ul class="accout">
+                <li class="accout_messeage">
+                  <img src="/tiyan.gif" width="238" height="45">
+                  <ul class="accout_messeageW">
+                    <template v-for="item in agentMenuItems" :key="item.key">
+                      <li :id="'menu_' + item.key">
+                        <a href="javascript:void(0)" @click="navigateTo(item.path)" :class="{ active: isActive(item.path) }">
+                          <span>{{ item.name }}</span>
+                        </a>
+                      </li>
+                    </template>
+                  </ul>
+                </li>
+              </ul>
+            </div>
+
             <!-- Account Section -->
             <div class="account_left_top">
               <ul class="accout">
@@ -180,60 +208,24 @@ const handleRefresh = () => {
 </template>
 
 <style scoped>
-/* Document Container */
-.doc {
-  width: 1200px;
-  margin: 0 auto;
-  padding: 20px 0;
-}
 
-.myaccount {
-  width: 100%;
-  display: flex;
-  overflow: hidden;
-}
-
-/* Left Sidebar */
-.account_leftt {
-  width: 238px;
-  float: left;
-}
-
-/* User Profile Top */
-.account_left_gktop {
-  width: 238px;
-  background: #fff;
-  border: 1px solid #e8e8e8;
-  padding: 15px 0;
-  margin-bottom: 10px;
-}
-
-.account_left_gktop ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.account_left_gktop .left_gktop_l {
+.left_gktop_l {
   margin-right: 15px;
 }
 
-.account_left_gktop .left_gktop_lk {
+.left_gktop_lk {
   position: relative;
   width: 70px;
   height: 70px;
   cursor: pointer;
 }
 
-.account_left_gktop .left_gktop_lk img {
+.left_gktop_lk img {
   border-radius: 50%;
   border: 2px solid #e9e9e9;
 }
 
-.account_left_gktop .left_gktop_lk .hoverlay {
+.left_gktop_lk .hoverlay {
   position: absolute;
   width: 70px;
   height: 70px;
@@ -248,33 +240,33 @@ const handleRefresh = () => {
   display: none;
 }
 
-.account_left_gktop .left_gktop_lk:hover .hoverlay {
+.left_gktop_lk:hover .hoverlay {
   display: block;
 }
 
-.account_left_gktop .left_gktop_fk {
+.left_gktop_fk {
   color: #666;
 }
 
-.account_left_gktop .left_gktop_fk p {
+.left_gktop_fk p {
   margin: 0;
   line-height: 24px;
   font-size: 13px;
 }
 
-.account_left_gktop .left_gktop_fk .leftnc_bt {
+.left_gktop_fk .leftnc_bt {
   font-size: 16px;
   font-weight: bold;
   color: #333;
   cursor: pointer;
 }
 
-.account_left_gktop .left_gktop_fk a {
+.left_gktop_fk a {
   color: #999;
   font-size: 12px;
 }
 
-.account_left_gktop .left_gktop_fk a:hover {
+.left_gktop_fk a:hover {
   color: #f03736;
 }
 

@@ -6,12 +6,9 @@ import {CardRecordField} from "@/types/shop.type.ts";
 import {depositRecords} from "@/api/customer.ts";
 import dayjs from "dayjs";
 import DataTable from "@/components/ui/DataTable.vue";
-import {useRouter} from "vue-router";
-import {ChevronLeft} from "lucide-vue-next";
 import UserLayout from "@/components/layout/UserLayout.vue";
 
 const {locale} = useI18n()
-const router = useRouter()
 // 币种符号
 const currency = LOCALE_CURRENCY_MAP[locale.value] ?? 'USD';
 
@@ -46,7 +43,7 @@ loadData();
         <span class="text-sm cursor-pointer pb-3 border-b-2 border-transparent -mb-4 text-[#ff6600] border-b-[#ff6600]">兑奖记录</span>
       </div>
 
-      <div class="min-h-[calc(100vh-120px)] px-5 pb-10">
+      <div class="min-h-[calc(100vh-120px)]">
         <div class="max-w-[1400px] mx-auto  items-start max-[1200px]:grid-cols-1 max-[1200px]:max-w-[600px]">
           <!-- 表格 -->
           <DataTable

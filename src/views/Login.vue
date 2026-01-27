@@ -28,7 +28,6 @@ onMounted(() => {
   httpConfigRKey().then(({ data, code }) => {
     if (code === 200 && data) {
       publicKey.value = data.key
-      console.log('Public key loaded:', data.key)
     }
   }).catch(error => {
     console.error('Failed to get public key:', error)
@@ -62,7 +61,6 @@ const handleLogin = async () => {
   try {
     // 加密密码
     const encryptedPassword = await SodiumEncryptor.encrypt(form.password, publicKey.value)
-    console.log('Encrypted password:', encryptedPassword)
 
     const res = await login({
       mobile: form.mobile,

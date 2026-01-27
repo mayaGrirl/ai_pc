@@ -1,54 +1,36 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import {ref, computed, onMounted, watch} from 'vue'
 import UserLayout from '@/components/layout/UserLayout.vue'
-import { signStat, signIn, signRecords } from '@/api/customer'
+import {signStat, signIn, signDates} from '@/api/customer'
+import SignIntro from './components/SignIntro.vue'
+import SignMember from './components/SignMember.vue'
+import SignRecord from './components/SignRecord.vue'
+import type {SignInStatisticsField} from "@/types/customer.type.ts";
+import {useToast} from "@/composables/useToast.ts";
 
+const toast = useToast()
 // 签到统计
-const stats = ref({
-  todayCount: 184,
-  totalAmount: 4118.85,
-  consecutiveDays: 22,
-  currentReward: 10
-})
-
-// 当前月份
+const stat = ref<SignInStatisticsField>()
+// 当前天
 const currentDate = ref(new Date())
-const currentYear = computed(() => currentDate.value.getFullYear())
+// 当前月份
 const currentMonth = computed(() => currentDate.value.getMonth() + 1)
+// 当前年份
+const currentYear = computed(() => currentDate.value.getFullYear())
 
 // 已签到的日期
-const signedDates = ref<number[]>([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19])
+const signedDates = ref<number[]>([])
+
+// 当天的日期
 const todayDate = new Date().getDate()
-
-// 近期签到用户
-const recentUsers = ref([
-  { user: 'sg48182', reward: 60, amount: 20, time: '8分钟前' },
-  { user: 'sgdjhjdjhx', reward: 140, amount: 70, time: '7分钟前' },
-  { user: 'sg48805', reward: 175, amount: 20, time: '12分钟前' },
-  { user: 'sg45899', reward: 10, amount: 2, time: '12分钟前' },
-  { user: 'sg45640', reward: 200, amount: 10, time: '13分钟前' },
-  { user: 'syedjzei', reward: 150, amount: 5, time: '14分钟前' },
-  { user: 'sg45596', reward: 700, amount: 35, time: '14分钟前' },
-  { user: 'sq2888888', reward: 400, amount: 5, time: '16分钟前' },
-  { user: 'sq48783', reward: 3, amount: 2, time: '17分钟前' },
-  { user: 'sq48044', reward: 420, amount: 140, time: '18分钟前' },
-])
-
-// 获取当月天数
-const getDaysInMonth = (year: number, month: number) => {
-  return new Date(year, month, 0).getDate()
-}
-
-// 获取当月第一天是星期几
-const getFirstDayOfMonth = (year: number, month: number) => {
-  return new Date(year, month - 1, 1).getDay()
-}
 
 // 生成日历数据
 const calendarDays = computed(() => {
   const days: (number | null)[] = []
-  const firstDay = getFirstDayOfMonth(currentYear.value, currentMonth.value)
-  const totalDays = getDaysInMonth(currentYear.value, currentMonth.value)
+  // 获取当月第一天是星期几
+  const firstDay = new Date(currentYear.value, currentMonth.value - 1, 1).getDay()
+  // 获取当月天数
+  const totalDays = new Date(currentYear.value, currentMonth.value, 0).getDate()
 
   // 填充空白
   for (let i = 0; i < firstDay; i++) {
@@ -67,9 +49,19 @@ const calendarDays = computed(() => {
 const prevMonth = () => {
   currentDate.value = new Date(currentYear.value, currentMonth.value - 2, 1)
 }
-
 const nextMonth = () => {
   currentDate.value = new Date(currentYear.value, currentMonth.value, 1)
+}
+// 切换年份
+const prevYear = () => {
+  const d = new Date(currentDate.value)
+  d.setFullYear(d.getFullYear() - 1)
+  currentDate.value = d
+}
+const nextYear = () => {
+  const d = new Date(currentDate.value)
+  d.setFullYear(d.getFullYear() + 1)
+  currentDate.value = d
 }
 
 // 签到
@@ -78,150 +70,200 @@ const handleSignIn = async () => {
     const res = await signIn()
     if (res.code === 200) {
       signedDates.value.push(todayDate)
-      alert('签到成功！')
+      toast.success('签到成功')
+      // 刷新统计
+      const {data, code} = await signStat()
+      if (code === 200 && data) {
+        stat.value = data
+      }
     } else {
-      alert(res.message || '签到失败')
+      toast.error(res.message)
     }
   } catch (error) {
+    const msg = error instanceof Error ? error.message : '签到失败';
     console.error('Sign in error:', error)
-    // 模拟签到成功
-    if (!signedDates.value.includes(todayDate)) {
-      signedDates.value.push(todayDate)
-      alert('签到成功！')
-    }
+    toast.error(msg)
   }
 }
 
-// 是否已签到
+// 指定天是否已签到
 const isSigned = (day: number | null) => {
   if (!day) return false
   return signedDates.value.includes(day)
 }
 
+// 是否当前天
 const isToday = (day: number | null) => {
   if (!day) return false
   const now = new Date()
   return day === now.getDate() &&
-         currentMonth.value === now.getMonth() + 1 &&
-         currentYear.value === now.getFullYear()
+    currentMonth.value === now.getMonth() + 1 &&
+    currentYear.value === now.getFullYear()
 }
+
+// 获取已签到日期
+const fetchSignedDates = async () => {
+  const y = currentYear.value;
+  const m = currentMonth.value.toString().padStart(2, '0');
+  try {
+    const {code, data} = await signDates(`${y}-${m}`);
+    if (code === 200 && data) {
+      signedDates.value = data.map(item => new Date(item).getDate());
+    } else {
+      signedDates.value = [];
+    }
+  } catch (error) {
+    console.error('Fetch signed dates error:', error);
+    signedDates.value = [];
+  }
+}
+// 监听月份变化
+watch(currentDate, () => {
+  void fetchSignedDates();
+})
 
 onMounted(async () => {
   try {
-    const res = await signStat()
-    if (res.code === 200 && res.data) {
-      stats.value = {
-        todayCount: res.data.total_people || stats.value.todayCount,
-        totalAmount: res.data.total_points || stats.value.totalAmount,
-        consecutiveDays: res.data.continue_days || stats.value.consecutiveDays,
-        currentReward: stats.value.currentReward
-      }
+    const {data, code} = await signStat()
+    if (code === 200 && data) {
+      stat.value = data
     }
+    await fetchSignedDates();
   } catch (error) {
     console.error('Failed to load sign stats:', error)
   }
 })
+
+const activeTab = ref('sign')
+const tabs = [
+  {key: 'sign', name: '签到'},
+  {key: 'record', name: '签到记录'}
+]
+const switchTab = (key: string) => {
+  activeTab.value = key
+}
 </script>
 
 <template>
   <UserLayout>
-    <div class="checkin-page">
+    <div class="flex flex-col gap-5">
       <!-- 页面标签 -->
-      <div class="page-tabs">
-        <span class="tab active">签到</span>
+      <div class="flex gap-5 border-b border-[#eee] pb-[15px]">
+        <span
+          v-for="tab in tabs"
+          :key="tab.key"
+          :class="['w-20 text-center text-sm cursor-pointer pb-3 border-b-2 border-transparent -mb-4 ', { 'text-[#ff6600] border-b-[#ff6600]': activeTab === tab.key }]"
+          @click="switchTab(tab.key)"
+        >
+          {{ tab.name }}
+        </span>
       </div>
 
-      <!-- 签到统计 -->
-      <div class="checkin-stats">
-        今日签到 <span class="highlight">{{ stats.todayCount }}</span> 人，
-        累计送出 <span class="highlight">{{ stats.totalAmount }}</span> 元
-        <span class="wait-text">等待返现</span>
-      </div>
+      <div v-if="activeTab === 'sign'">
+        <!-- 签到统计 -->
+        <div class="flex justify-around items-center gap-[30px]">
+          <div class="text-center text-[13px] text-[#666]">
+            连续签到
+            <span class="font-bold text-[#ff6600]">{{ stat?.continue_days || 0 }}</span>
+            天，累计签到
+            <span class="font-bold text-[#ff6600]">{{ stat?.total_days || 0 }}</span>
+            天
+          </div>
 
-      <!-- 主内容区 -->
-      <div class="checkin-content">
-        <!-- 左侧日历 -->
-        <div class="calendar-section">
-          <div class="calendar-header">
-            <button class="nav-btn" @click="prevMonth">&lt;</button>
-            <span class="month-title">{{ currentYear }}年 {{ currentMonth }}月</span>
-            <button class="nav-btn" @click="nextMonth">&gt;</button>
+          <div class="flex">
+            <div class="flex items-center gap-2.5">
+              <span class="text-[15px] font-medium text-[#333333]">今日签到:</span>
+              <span class="text-base font-bold text-[#ff6600]">{{stat?.total_people}}</span>
+              人
+            </div>
+            <div class="flex items-center gap-2.5">
+              <span class="text-[15px] font-medium text-[#333333]">累计送出:</span>
+              <span class="text-base font-bold text-[#ff6600]">{{stat?.total_points}}</span>
+              金豆
+              <span class="text-base font-bold text-[#ff6600]">{{stat?.total_base_coin}}</span>
+              积分
+            </div>
           </div>
-          <div class="calendar-weekdays">
-            <span>日</span>
-            <span>一</span>
-            <span>二</span>
-            <span>三</span>
-            <span>四</span>
-            <span>五</span>
-            <span>六</span>
-          </div>
-          <div class="calendar-days">
+        </div>
+        <!-- 主内容区 -->
+        <div class="flex justify-between">
+          <div class="w-5/12">
+            <div class="mb-[15px] flex items-center justify-center gap-1">
+              <button
+                class="cursor-pointer bg-transparent px-1 py-2 text-[16px] text-[#666] hover:text-[#ff6600]"
+                @click="prevYear"
+              >&lt;&lt;</button>
+              <button
+                class="cursor-pointer bg-transparent px-1 py-2 text-[16px] text-[#666] hover:text-[#ff6600]"
+                @click="prevMonth"
+              >&lt;</button>
+
+              <span class="text-[16px] font-bold text-[#333]">
+              {{ currentYear }}年 {{ currentMonth }}月
+            </span>
+
+              <button
+                class="cursor-pointer bg-transparent px-1 py-2 text-[16px] text-[#666] hover:text-[#ff6600]"
+                @click="nextMonth"
+              >&gt;</button>
+              <button
+                class="cursor-pointer bg-transparent px-1 py-2 text-[16px] text-[#666] hover:text-[#ff6600]"
+                @click="nextYear"
+              >&gt;&gt;</button>
+            </div>
+            <div class="mb-[10px] grid grid-cols-7 text-center">
+              <span class="p-2 text-[13px] text-[#999]">日</span>
+              <span class="p-2 text-[13px] text-[#999]">一</span>
+              <span class="p-2 text-[13px] text-[#999]">二</span>
+              <span class="p-2 text-[13px] text-[#999]">三</span>
+              <span class="p-2 text-[13px] text-[#999]">四</span>
+              <span class="p-2 text-[13px] text-[#999]">五</span>
+              <span class="p-2 text-[13px] text-[#999]">六</span>
+            </div>
+
+            <!-- days -->
+            <div class="grid grid-cols-7 gap-1">
             <span
               v-for="(day, index) in calendarDays"
               :key="index"
-              :class="['day', {
-                empty: !day,
-                signed: isSigned(day),
-                today: isToday(day)
-              }]"
+              class="aspect-square flex items-center justify-center rounded text-[14px] text-[#333]"
+              :class="[
+                !day ? 'cursor-default' : 'cursor-pointer',
+                day && isSigned(day) ? 'bg-[#ff6600] text-white' : '',
+                day && isToday(day) ? 'border-2 border-[#ff6600]' : ''
+              ]"
             >
               {{ day || '' }}
             </span>
+            </div>
+
+            <!-- action -->
+            <div class="my-5 text-center">
+              <button
+                :disabled="stat?.is_sign"
+                class="cursor-pointer rounded bg-gradient-to-br  px-[50px] py-3 text-[16px] text-white hover:opacity-90"
+                :class="[stat?.is_sign ? 'from-[#cccccc] to-[#cccccc]' : 'from-[#ff6600] to-[#ff8533]']"
+                @click="handleSignIn"
+              >
+                {{stat?.is_sign ? '已签到' : '立即签到'}}
+              </button>
+            </div>
           </div>
-          <div class="calendar-action">
-            <button class="btn-signin" @click="handleSignIn">立即签到</button>
-          </div>
-          <div class="consecutive-info">
-            连续签到 <span class="days">{{ stats.consecutiveDays }}</span> 天，累计签到 <span class="days">{{ stats.consecutiveDays }}</span> 天
+
+          <!-- 近期签到用户 -->
+          <div class="w-6/12">
+            <div class="text-center text-[16px] font-bold text-[#333] mb-[15px] py-2">近期签到用户</div>
+            <SignMember />
           </div>
         </div>
-
-        <!-- 右侧近期签到用户 -->
-        <div class="recent-section">
-          <div class="recent-header">近期签到用户</div>
-          <div class="recent-table">
-            <div class="table-header">
-              <span>会员</span>
-              <span>签到积分</span>
-              <span>获得奖励</span>
-            </div>
-            <div class="table-body">
-              <div v-for="user in recentUsers" :key="user.user" class="table-row">
-                <span class="user">{{ user.user }}</span>
-                <span class="reward">{{ user.reward }}</span>
-                <span class="amount">{{ user.amount }}</span>
-              </div>
-            </div>
-          </div>
+        <!-- 签到说明 -->
+        <div class="bg-white">
+          <SignIntro />
         </div>
       </div>
 
-      <!-- 签到说明 -->
-      <div class="checkin-rules">
-        <div class="rules-header">签到说明</div>
-        <div class="rules-content">
-          <p>签到13周起，签到积累达7天及以上且昨夜投注10元以上即可每日8元，签到积累多每日8元。</p>
-          <div class="rules-progress">
-            <div class="progress-item">
-              <span class="icon">✓</span>
-              <span>签到1次获用赠额的 0.5 %,连续签到天数</span>
-            </div>
-            <div class="progress-bar">
-              <span class="bar active"></span>
-              <span class="bar active"></span>
-              <span class="bar"></span>
-              <span class="bar"></span>
-              <span class="bar"></span>
-              <span class="bar"></span>
-              <span class="bar"></span>
-              <span class="bar"></span>
-              <span class="bar"></span>
-              <span class="bar"></span>
-            </div>
-            <div class="progress-label">10 *连续签到天数</div>
-          </div>
-        </div>
+      <div v-if="activeTab === 'record'">
+        <SignRecord />
       </div>
     </div>
   </UserLayout>

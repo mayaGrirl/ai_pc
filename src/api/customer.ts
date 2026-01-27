@@ -41,6 +41,20 @@ export const signStat = (): Promise<HttpRes<SignInStatisticsField>> => {
 }
 
 /**
+ * 指定月份的签到日期集合
+ */
+export const signDates = (_m: string): Promise<HttpRes<string[]>> => {
+  return http.get('/api/app/v1/customer/sign/dates', {m: _m})
+}
+
+/**
+ * 近期签到用户
+ */
+export const recentSignUsers = (): Promise<HttpRes<SignInRecord>> => {
+  return http.get('/api/app/v1/recent/sign/users', {})
+}
+
+/**
  * 签到
  */
 export const signIn = (): Promise<HttpRes<SignInStatisticsField>> => {

@@ -68,7 +68,6 @@ const handleReceive = async (t: number) => {
       toast.success('领取成功');
       // 局部更新行状态
       dataSource.value = dataSource.value.map(item => item.id === t ? data : item)
-      // setList(prev => prev.map(item => item.id === t ? data : item))
     } else {
       toast.error(message);
     }

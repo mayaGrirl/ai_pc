@@ -1,5 +1,4 @@
 <script setup lang="ts">
-
 import {ref} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import UserLayout from '@/components/layout/UserLayout.vue'
@@ -18,8 +17,8 @@ const tabs = [
   {key: 'record', name: '工资日记录'}
 ]
 const switchTab = (key: string) => {
-  activeTab.value = key
-  router.push({query: {...route.query, tab: key}})
+  activeTab.value = key;
+  router.push({query: {...route.query, tab: key}});
 }
 </script>
 

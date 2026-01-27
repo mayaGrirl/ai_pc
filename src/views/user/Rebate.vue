@@ -1,107 +1,46 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import UserLayout from '@/components/layout/UserLayout.vue'
-import { rebateRecords } from '@/api/customer'
+import RebateRecharge from './components/RebateRecharge.vue'
+import RebateLoss from './components/RebateLoss.vue'
+import {useRoute, useRouter} from "vue-router";
 
-const activeTab = ref('deposit')
+const route = useRoute()
+const router = useRouter()
+const activeTab = ref(route.query.tab as string || 'recharge')
 const tabs = [
-  { key: 'deposit', name: '充值返利' },
+  { key: 'recharge', name: '充值返利' },
   { key: 'loss', name: '亏损返利' },
-  { key: 'group', name: '2.8群亏损返利' }
 ]
-
-interface RebateRecord {
-  id: number
-  date: string
-  validBet: number
-  deposit: number
-  rebate: number
-  status: string
-}
-
-const records = ref<RebateRecord[]>([])
-const loading = ref(false)
-
-const loadData = async () => {
-  loading.value = true
-  try {
-    const res = await rebateRecords({ type: activeTab.value })
-    if (res.code === 200 && res.data) {
-      records.value = res.data.map((item: any) => ({
-        id: item.id,
-        date: item.date || item.created_at,
-        validBet: item.valid_bet || item.validBet || 0,
-        deposit: item.deposit || item.recharge || 0,
-        rebate: item.rebate || item.amount || 0,
-        status: item.status_name || item.status || '未领取'
-      }))
-    }
-  } catch (error) {
-    console.error('Failed to load rebate records:', error)
-    records.value = []
-  } finally {
-    loading.value = false
-  }
-}
-
 const switchTab = (key: string) => {
-  activeTab.value = key
-  loadData()
+  activeTab.value = key;
+  router.push({query: {...route.query, tab: key}});
 }
-
-const formatNumber = (num: number) => {
-  return num?.toLocaleString() || '0'
-}
-
-onMounted(() => {
-  loadData()
-})
 </script>
 
 <template>
   <UserLayout>
-    <div class="rebate-page">
+    <div class="flex flex-col gap-5">
       <!-- 页面标签 -->
-      <div class="page-tabs">
+      <div class="flex gap-5 border-b border-[#eee] pb-[15px]">
         <span
           v-for="tab in tabs"
           :key="tab.key"
-          :class="['tab', { active: activeTab === tab.key }]"
+          :class="['w-20 text-center text-sm cursor-pointer pb-3 border-b-2 border-transparent -mb-4 ', { 'text-[#ff6600] border-b-[#ff6600]': activeTab === tab.key }]"
           @click="switchTab(tab.key)"
         >
           {{ tab.name }}
         </span>
       </div>
 
-      <!-- 返利记录表格 -->
-      <div class="rebate-table">
-        <table>
-          <thead>
-            <tr>
-              <th>日期</th>
-              <th>有效流水</th>
-              <th>充值</th>
-              <th>返利</th>
-              <th>状态</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="record in records" :key="record.id">
-              <td>{{ record.date }}</td>
-              <td>{{ formatNumber(record.validBet) }}</td>
-              <td>{{ formatNumber(record.deposit) }}</td>
-              <td class="rebate-amount">{{ formatNumber(record.rebate) }}</td>
-              <td>
-                <span :class="['status', record.status === '已领取' ? 'done' : record.status === '可领取' ? 'active' : '']">
-                  {{ record.status }}
-                </span>
-              </td>
-            </tr>
-            <tr v-if="records.length === 0 && !loading">
-              <td colspan="5" class="empty-cell">无数据</td>
-            </tr>
-          </tbody>
-        </table>
+      <!-- 充值返利 -->
+      <div v-if="activeTab == 'recharge'">
+        <RebateRecharge />
+      </div>
+
+      <!-- 亏损返利 -->
+      <div v-if="activeTab == 'loss'">
+        <RebateLoss />
       </div>
     </div>
   </UserLayout>

@@ -97,13 +97,6 @@ export const updateProfile = (data: UpdateProfileDto): Promise<HttpRes<unknown>>
 }
 
 /**
- * 返利记录
- */
-export const rebateRecords = (params?: { type?: string; pagination?: any; page?: number; pageSize?: number }): Promise<HttpRes<any>> => {
-  return http.get('/api/app/v1/customer/rebate-records', params || {})
-}
-
-/**
  * 提现动态记录
  */
 export const withdrawalDynamics = (limit: number = 10): Promise<HttpRes<DepositRecordField[]>> => {

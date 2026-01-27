@@ -7,7 +7,10 @@ import SignMember from './components/SignMember.vue'
 import SignRecord from './components/SignRecord.vue'
 import type {SignInStatisticsField} from "@/types/customer.type.ts";
 import {useToast} from "@/composables/useToast.ts";
+import {useRoute, useRouter} from 'vue-router'
 
+const route = useRoute()
+const router = useRouter()
 const toast = useToast()
 // 签到统计
 const stat = ref<SignInStatisticsField>()
@@ -134,13 +137,14 @@ onMounted(async () => {
   }
 })
 
-const activeTab = ref('sign')
+const activeTab = ref(route.query.tab as string || 'sign')
 const tabs = [
   {key: 'sign', name: '签到'},
   {key: 'record', name: '签到记录'}
 ]
 const switchTab = (key: string) => {
   activeTab.value = key
+  router.push({query: {...route.query, tab: key}})
 }
 </script>
 

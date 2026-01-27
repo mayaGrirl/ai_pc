@@ -9,6 +9,7 @@ import dayjs from "dayjs";
 import DataTable from "@/components/ui/DataTable.vue";
 import {useRouter} from "vue-router";
 import {ChevronLeft} from "lucide-vue-next";
+import {onMounted} from "vue";
 
 const {locale} = useI18n()
 const router = useRouter()
@@ -35,7 +36,9 @@ const columns = [
   { key: 'a_deposit', title: '银行余额', width: '15%', align: 'center' as const },
 ]
 
-loadData();
+onMounted(() => {
+  loadData();
+})
 </script>
 
 <template>

@@ -2,7 +2,6 @@
 import { CardRecordField } from "@/types/shop.type.ts";
 import DataTable from '@/components/ui/DataTable.vue'
 import { useTable } from '@/composables/useTable.ts'
-import {getSecureToken} from "@/utils/verify-key.ts";
 import {signRecords} from "@/api/customer.ts";
 
 // 初始化表格
@@ -14,8 +13,7 @@ const {
   loadData,
   changePage,
 } = useTable<CardRecordField>(signRecords, {
-  defaultSize: 10,
-  initQuery: {t: getSecureToken()}
+  defaultSize: 10
 })
 
 // 列配置

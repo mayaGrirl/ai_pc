@@ -38,7 +38,6 @@ const entertainmentMenuItems = [
 ]
 
 const personalMenuItems = [
-  { name: '手机认证', path: '/user/verify', key: 'checkmobile' },
   { name: '修改资料', path: '/user/profile', key: 'mydetail' },
   { name: '安全中心', path: '/user/security', key: 'security' },
   { name: '登录日志', path: '/user/logs', key: 'actionlog' }

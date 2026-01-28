@@ -161,12 +161,6 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '推广赚币', requiresAuth: true }
   },
   {
-    path: '/user/verify',
-    name: 'UserVerify',
-    component: () => import('@/views/user/Verify.vue'),
-    meta: { title: '手机认证', requiresAuth: true }
-  },
-  {
     path: '/user/profile',
     name: 'UserProfile',
     component: () => import('@/views/user/Profile.vue'),

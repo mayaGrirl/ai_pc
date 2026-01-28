@@ -72,13 +72,6 @@ const beginnerTasks = computed(() => {
       path: '/user/security'
     },
     {
-      name: '手机认证',
-      desc: '用于验证你的身份，保护账户安全',
-      completed: !!customerData?.mobile,
-      action: customerData?.mobile ? '已认证' : '马上认证',
-      path: '/user/verify'
-    },
-    {
       name: '完善支付宝账号',
       desc: '更好的核实身份，保护账户安全',
       completed: !!memberField?.alipay,

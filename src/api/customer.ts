@@ -1,6 +1,6 @@
 import http from '@/utils/request'
 import type { HttpRes, PageRequest } from '@/types/http.type'
-import type {
+import {
   DepositRecordField,
   CustomerProfile,
   MemberCapital,
@@ -30,7 +30,7 @@ import type {
   RedeemGiftVerifyTypeDto,
   ViewCardVerifyTypeDto,
   CustomerTransferDto,
-  PackExchangeDto
+  PackExchangeDto, LoginLogField
 } from '@/types/customer.type'
 
 /**
@@ -85,8 +85,8 @@ export const depositRecords = (data: PageRequest): Promise<HttpRes<DepositRecord
 /**
  * 登录日志
  */
-export const loginLogs = (params?: { pagination?: any; page?: number; pageSize?: number }): Promise<HttpRes<any>> => {
-  return http.get('/api/app/v1/customer/login-logs', params || {})
+export const loginLogs = (data: PageRequest): Promise<HttpRes<LoginLogField[]>> => {
+  return http.post('/api/app/v1/customer/login-logs', data)
 }
 
 /**

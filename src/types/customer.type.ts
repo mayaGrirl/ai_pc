@@ -358,3 +358,19 @@ export interface CustomerTransferDto {
 export interface PackExchangeDto {
   code: string;
 }
+
+// 登录日志
+export interface LoginLogField {
+  id: number;
+  type: number;
+  auser: string;
+  pass: string;
+  ip: string;
+  address: string;
+  behavior: number;
+  browser: string;
+  equipment: string;
+  useragent: string;
+  url: string;
+  addtime: number;
+}

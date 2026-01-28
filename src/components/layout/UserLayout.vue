@@ -173,7 +173,7 @@ const handleRefresh = () => {
             <div class="layui-card-body">
               <ul class="indexinfo">
                 <li>
-                  <div>豆豆</div>
+                  <div>金豆</div>
                   <div><span class="coin">{{ formatNumber(customer?.points || 0) }}</span></div>
                 </li>
                 <li>

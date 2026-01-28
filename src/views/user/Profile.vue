@@ -1,47 +1,92 @@
 <script setup lang="ts">
-import {ref, onMounted} from 'vue'
+import {ref, onMounted, computed} from 'vue'
 import UserLayout from '@/components/layout/UserLayout.vue'
 import {useAuthStore} from '@/stores/auth'
-import {getMemberField, updateProfile, updateNickname} from '@/api/customer'
+import {getMemberField, updateProfile, updateNickname, bindEmail} from '@/api/customer'
 import {MemberField} from "@/types/customer.type.ts";
 import {useField, useForm} from "vee-validate";
 import {z} from "zod";
 import {toTypedSchema} from "@vee-validate/zod";
 import {useToast} from "@/composables/useToast.ts";
-import {maskString} from "@/utils/utils.ts";
+import {isEmpty, maskString} from "@/utils/utils.ts";
+import Decimal from "decimal.js";
 
-const toast = useToast()
-const authStore = useAuthStore()
+const toast = useToast();
+const authStore = useAuthStore();
+const customer = computed(() => authStore.currentCustomer)
 
-const isEditingNickname = ref(false)
-const nicknameInput = ref('')
+const isEditingNickname = ref(false);
+const nicknameInput = ref('');
 
+// 修改昵称
 const startEditNickname = () => {
-  nicknameInput.value = profile.value?.nickname || ''
-  isEditingNickname.value = true
+  nicknameInput.value = profile.value?.nickname || '';
+  isEditingNickname.value = true;
 }
-
 const saveNickname = async () => {
   if (!nicknameInput.value) {
-    toast.error('昵称不能为空')
-    return
+    toast.error('昵称不能为空');
+    return;
   }
   try {
     const {code, message} = await updateNickname({nickname: nicknameInput.value})
     if (code === 200) {
       if (profile.value) {
-        profile.value.nickname = nicknameInput.value
+        profile.value.nickname = nicknameInput.value;
       }
-      isEditingNickname.value = false
-      toast.success('昵称修改成功')
+      isEditingNickname.value = false;
+      toast.success('昵称修改成功');
+
+      let points = customer.value?.points;
+      if (customer.value?.points) {
+        points = new Decimal(customer.value?.points).sub(200).toNumber();
+      }
       authStore.setCurrentCustomer({
         nickname: nicknameInput.value,
+        points: points,
       })
     } else {
-      toast.error(message || '修改失败')
+      toast.error(message || '修改失败');
     }
   } catch (error: any) {
-    toast.error(error.message || '修改失败')
+    toast.error(error.message || '修改失败');
+  }
+}
+
+// 绑定邮箱
+const isEditingEmail = ref(false);
+const emailInput = ref('');
+const isBindEmail = ref<boolean>(false);
+const startEditEmail = () => {
+  emailInput.value = profile.value?.email || '';
+  isEditingEmail.value = true;
+}
+const saveEmail = async () => {
+  if (!emailInput.value) {
+    toast.error('邮箱不能为空');
+    return;
+  }
+  // Basic email regex
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(emailInput.value)) {
+    toast.error('请输入有效的邮箱地址');
+    return;
+  }
+
+  try {
+    const {code, message} = await bindEmail({email: emailInput.value})
+    if (code === 200) {
+      if (profile.value) {
+        profile.value.email = emailInput.value;
+      }
+      isEditingEmail.value = false;
+      isBindEmail.value = false;
+      toast.success('邮箱绑定成功');
+    } else {
+      toast.error(message || '绑定失败');
+    }
+  } catch (error: any) {
+    toast.error(error.message || '绑定失败');
   }
 }
 
@@ -106,10 +151,6 @@ const submitExchange = handleSubmit(async (values) => {
       toast.error(message);
     } else {
       toast.success('充值成功');
-
-      // authStore.setCurrentCustomer({
-      //   bankpoints: data.bankpoints,
-      // })
       resetForm();
       void fetchData();
     }
@@ -135,6 +176,9 @@ const fetchData = async () => {
       wchat.value = data.wchat || ''
       address.value = data.address || ''
       signature.value = data.signature || ''
+      if (isEmpty(data.email)) {
+        isBindEmail.value = true;
+      }
     }
   } catch (error) {
     console.error('Get member field error:', error)
@@ -168,7 +212,9 @@ onMounted(() => {
           <div class="grid grid-cols-2 gap-4 mb-6 bg-gray-50 p-4 rounded-lg">
             <div class="flex flex-col gap-1">
               <span class="text-xs text-gray-500">手机号码</span>
-              <span class="text-sm font-bold text-gray-800 font-mono">{{ maskString(profile?.mobile || '', 3, 4) }}</span>
+              <span class="text-sm font-bold text-gray-800 font-mono">{{
+                  maskString(profile?.mobile || '', 3, 4)
+                }}</span>
             </div>
             <div class="flex flex-col gap-1">
               <span class="text-xs text-gray-500">邮箱地址</span>
@@ -188,7 +234,8 @@ onMounted(() => {
                     placeholder="请输入QQ号码"
                     class="w-full pl-3 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#ff6600]/20 focus:border-[#ff6600] outline-none transition-all placeholder-gray-400"
                   />
-                  <div v-else class="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600 cursor-not-allowed select-none">
+                  <div v-else
+                       class="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600 cursor-not-allowed select-none">
                     {{ profile.qq }}
                   </div>
                 </div>
@@ -204,7 +251,8 @@ onMounted(() => {
                     placeholder="请输入微信号码"
                     class="w-full pl-3 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#ff6600]/20 focus:border-[#ff6600] outline-none transition-all placeholder-gray-400"
                   />
-                  <div v-else class="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600 cursor-not-allowed select-none">
+                  <div v-else
+                       class="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600 cursor-not-allowed select-none">
                     {{ profile.wchat }}
                   </div>
                 </div>
@@ -220,7 +268,8 @@ onMounted(() => {
                     placeholder="请输入支付宝账号"
                     class="w-full pl-3 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#ff6600]/20 focus:border-[#ff6600] outline-none transition-all placeholder-gray-400"
                   />
-                  <div v-else class="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600 cursor-not-allowed select-none">
+                  <div v-else
+                       class="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600 cursor-not-allowed select-none">
                     {{ profile.alipay }}
                   </div>
                 </div>
@@ -236,9 +285,11 @@ onMounted(() => {
                     placeholder="请输入真实姓名"
                     class="w-full pl-3 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#ff6600]/20 focus:border-[#ff6600] outline-none transition-all placeholder-gray-400"
                   />
-                  <div v-else class="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600 cursor-not-allowed select-none">
-                     {{ profile.realname }}
-                     <span class="ml-2 text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full border border-green-100">已实名</span>
+                  <div v-else
+                       class="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600 cursor-not-allowed select-none">
+                    {{ profile.realname }}
+                    <span
+                      class="ml-2 text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full border border-green-100">已实名</span>
                   </div>
                 </div>
               </div>
@@ -253,7 +304,9 @@ onMounted(() => {
                     placeholder="请填写真实收货地址"
                     class="w-full pl-3 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#ff6600]/20 focus:border-[#ff6600] outline-none transition-all placeholder-gray-400"
                   />
-                   <div v-else class="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600 cursor-not-allowed select-none truncate" :title="profile.address">
+                  <div v-else
+                       class="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600 cursor-not-allowed select-none truncate"
+                       :title="profile.address">
                     {{ profile.address }}
                   </div>
                 </div>
@@ -274,8 +327,14 @@ onMounted(() => {
 
             <!-- Notice -->
             <div class="flex items-start gap-2 bg-orange-50 p-3 rounded-lg border border-orange-100">
-               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff6600" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-               <span class="text-xs text-orange-700 leading-tight">温馨提示：部分资料保存后不可再次修改，请务必填写真实有效的信息。如有填写错误，请联系在线客服处理。</span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                   stroke="#ff6600" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+              <span
+                class="text-xs text-orange-700 leading-tight">温馨提示：部分资料保存后不可再次修改，请务必填写真实有效的信息。如有填写错误，请联系在线客服处理。</span>
             </div>
 
             <button type="submit"
@@ -288,52 +347,100 @@ onMounted(() => {
 
         <!-- Right Column: Nickname & Avatar Card -->
         <div class="w-[320px] shrink-0">
-           <div class="bg-white rounded-xl border border-gray-100 p-6 shadow-sm sticky top-5">
-              <div class="flex flex-col items-center text-center">
-                 <h3 class="text-lg font-bold text-gray-800 mb-1">{{ profile?.nickname || '未设置昵称' }}</h3>
-                 <p class="text-xs text-gray-400 mb-6 font-mono">ID: {{ profile?.aid || '-' }}</p>
+          <div class="bg-white rounded-xl border border-gray-100 p-6 shadow-sm sticky top-5">
+            <div class="flex flex-col items-center text-center">
+              <h3 class="text-lg font-bold text-gray-800 mb-1">{{ profile?.nickname || '未设置昵称' }}</h3>
+              <p class="text-xs text-gray-400 mb-6 font-mono">ID: {{ profile?.aid || '-' }}</p>
 
-                 <!-- Nickname Edit Area -->
-                 <div class="w-full bg-gray-50 rounded-lg p-4 border border-gray-100">
-                    <div class="text-xs font-bold text-gray-500 mb-3 text-left uppercase tracking-wider">修改昵称</div>
+              <!-- Nickname Edit Area -->
+              <div class="w-full bg-gray-50 rounded-lg p-4 border border-gray-100">
+                <div class="text-xs font-bold text-gray-500 mb-3 text-left uppercase tracking-wider">修改昵称</div>
 
-                    <div v-if="!isEditingNickname" class="flex flex-col gap-3">
-                       <button
-                         @click="startEditNickname"
-                         class="w-full py-2 bg-white border border-gray-200 text-gray-700 rounded-md text-sm hover:border-[#ff6600] hover:text-[#ff6600] transition-colors flex items-center justify-center gap-2"
-                       >
-                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                         点击修改
-                       </button>
-                    </div>
+                <div v-if="!isEditingNickname" class="flex flex-col gap-3">
+                  <button
+                    @click="startEditNickname"
+                    class="w-full py-2 bg-white border border-gray-200 text-gray-700 rounded-md text-sm hover:border-[#ff6600] hover:text-[#ff6600] transition-colors flex items-center justify-center gap-2"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                    点击修改
+                  </button>
+                </div>
 
-                    <div v-else class="flex flex-col gap-3">
-                       <input
-                         v-model="nicknameInput"
-                         type="text"
-                         placeholder="请输入新昵称"
-                         class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm outline-none focus:border-[#ff6600]"
-                         maxlength="12"
-                       />
-                       <div class="flex gap-2">
-                          <button
-                            @click="isEditingNickname = false"
-                            class="flex-1 py-1.5 bg-gray-200 text-gray-600 rounded text-xs hover:bg-gray-300 transition-colors"
-                          >
-                            取消
-                          </button>
-                          <button
-                            @click="saveNickname"
-                            class="flex-1 py-1.5 bg-[#ff6600] text-white rounded text-xs hover:bg-[#ff5500] transition-colors"
-                          >
-                            确认
-                          </button>
-                       </div>
-                    </div>
-                 </div>
-
+                <div v-else class="flex flex-col gap-3">
+                  <input
+                    v-model="nicknameInput"
+                    type="text"
+                    placeholder="请输入新昵称"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm outline-none focus:border-[#ff6600]"
+                    maxlength="12"
+                  />
+                  <span class="text-xs text-orange-700 leading-tight text-left">
+                    修改昵称需要花费 200
+                    <img alt="coin" class="inline-block w-[13px] h-[13px]" src="/ranking/coin.png"/>
+                  </span>
+                  <div class="flex gap-2">
+                    <button
+                      @click="isEditingNickname = false"
+                      class="flex-1 py-1.5 bg-gray-200 text-gray-600 rounded text-xs hover:bg-gray-300 transition-colors"
+                    >
+                      取消
+                    </button>
+                    <button
+                      @click="saveNickname"
+                      class="flex-1 py-1.5 bg-[#ff6600] text-white rounded text-xs hover:bg-[#ff5500] transition-colors"
+                    >
+                      确认
+                    </button>
+                  </div>
+                </div>
               </div>
-           </div>
+
+              <div class="w-full bg-gray-50 rounded-lg p-4 border border-gray-100 mt-4" v-if="isBindEmail">
+                <div class="text-xs font-bold text-gray-500 mb-3 text-left uppercase tracking-wider">绑定邮箱</div>
+
+                <div v-if="!isEditingEmail" class="flex flex-col gap-3">
+                  <button
+                    @click="startEditEmail"
+                    class="w-full py-2 bg-white border border-gray-200 text-gray-700 rounded-md text-sm hover:border-[#ff6600] hover:text-[#ff6600] transition-colors flex items-center justify-center gap-2"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                      <polyline points="22,6 12,13 2,6"></polyline>
+                    </svg>
+                    {{ profile?.email ? '修改邮箱' : '点击绑定' }}
+                  </button>
+                </div>
+
+                <div v-else class="flex flex-col gap-3">
+                  <input
+                    v-model="emailInput"
+                    type="email"
+                    placeholder="请输入您的邮箱"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm outline-none focus:border-[#ff6600]"
+                  />
+                  <div class="flex gap-2">
+                    <button
+                      @click="isEditingEmail = false"
+                      class="flex-1 py-1.5 bg-gray-200 text-gray-600 rounded text-xs hover:bg-gray-300 transition-colors"
+                    >
+                      取消
+                    </button>
+                    <button
+                      @click="saveEmail"
+                      class="flex-1 py-1.5 bg-[#ff6600] text-white rounded text-xs hover:bg-[#ff5500] transition-colors"
+                    >
+                      确认
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

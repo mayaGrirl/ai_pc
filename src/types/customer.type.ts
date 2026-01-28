@@ -296,8 +296,7 @@ export interface BindEmailDto {
 
 // 修改密码
 export interface UpdatePasswordDto {
-  safe_ask: string;
-  answer: string;
+  verify_code: string;
   password: string;
   confirm_password: string;
 }

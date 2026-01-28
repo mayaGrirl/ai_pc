@@ -309,13 +309,13 @@ onMounted(() => {
                     min="0"
                     v-model.number="amount"
                     placeholder="请输入100的整数倍"
-                    class="px-4 py-[14px] pr-20 border-2 border-gray-200 rounded-lg text-[15px] transition-all
+                    class="px-4 py-3 pr-20 border-2 border-gray-200 rounded-lg text-sm transition-all
                     duration-300 outline-none focus:border-[#667eea] focus:shadow-[0_0_0_3px_rgba(102,126,234,0.1)]
                     flex-1 min-w-0 text-gray-600 placeholder-gray-400 focus:outline-none"
                     autocomplete="off"
                     spellcheck="false"
                   />
-                  <span class="absolute right-4 text-[#666] text-[15px]">元</span>
+                  <span class="absolute right-4 text-[#666] text-sm">元</span>
                 </div>
                 <ErrorMessage name="amount" class="text-[#ff4d4f] text-sm"/>
               </div>
@@ -323,7 +323,7 @@ onMounted(() => {
               <!-- 折合金豆 -->
               <div class="flex gap-[1px] flex-col">
                 <label class="text-[15px] font-medium text-[#333333]">折合金豆</label>
-                <div class="flex items-center gap-2 px-4 py-[14px] bg-gray-50 rounded-lg border-2 border-gray-200">
+                <div class="flex items-center gap-2 px-4 py-3 bg-gray-50 rounded-lg border-2 border-gray-200">
                   <span class="text-lg font-bold text-[#333]">{{ discountedBeans }}</span>
                   <span class="text-lg">
                     <img
@@ -338,9 +338,9 @@ onMounted(() => {
               <!-- 手续费 -->
               <div class="flex gap-[1px] flex-col">
                 <label class="text-[15px] font-medium text-[#333333]">手续费</label>
-                <div class="relative flex items-center gap-2 px-4 py-[14px] bg-gray-50 rounded-lg border-2 border-gray-200">
+                <div class="relative flex items-center gap-2 px-4 py-3 bg-gray-50 rounded-lg border-2 border-gray-200">
                   <span class="text-lg font-bold text-[#333]">{{ serviceFee }}</span>
-                  <span class="absolute right-4 text-[#666] text-[15px]">元</span>
+                  <span class="absolute right-4 text-[#666] text-sm">元</span>
                 </div>
               </div>
 
@@ -364,7 +364,7 @@ onMounted(() => {
                   <div class="relative flex items-center gap-1">
                     <select id="safe_ask"
                             v-model="safeAsk"
-                            class="px-4 py-[14px] border-2 border-gray-200 rounded-lg text-[15px] transition-all
+                            class="px-4 py-3 border-2 border-gray-200 rounded-lg text-sm transition-all
                     duration-300 outline-none focus:border-[#667eea] focus:shadow-[0_0_0_3px_rgba(102,126,234,0.1)]
                     flex-1 min-w-0 text-gray-600 placeholder-gray-400 focus:outline-none">
                       <option key="option-default" value="">请选择问题</option>
@@ -384,7 +384,7 @@ onMounted(() => {
                       type="text"
                       v-model="answer"
                       placeholder="请输入答案"
-                      class="px-4 py-[14px] border-2 border-gray-200 rounded-lg text-[15px] transition-all
+                      class="px-4 py-3 border-2 border-gray-200 rounded-lg text-sm transition-all
                     duration-300 outline-none focus:border-[#667eea] focus:shadow-[0_0_0_3px_rgba(102,126,234,0.1)]
                     flex-1 min-w-0 text-gray-600 placeholder-gray-400 focus:outline-none"
                       autocomplete="off"

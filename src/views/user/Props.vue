@@ -142,7 +142,7 @@ onMounted(() => {
             <div class="relative flex items-center gap-1">
               <select id="safe_ask"
                       v-model="safeAsk"
-                      class="px-4 py-[14px] border-2 border-gray-200 rounded-lg text-[15px] transition-all
+                      class="px-4 py-3 border-2 border-gray-200 rounded-lg text-sm transition-all
                     duration-300 outline-none focus:border-[#667eea] focus:shadow-[0_0_0_3px_rgba(102,126,234,0.1)]
                     flex-1 min-w-0 text-gray-600 placeholder-gray-400 focus:outline-none">
                 <option key="option-default" value="">请选择问题</option>
@@ -162,7 +162,7 @@ onMounted(() => {
                 type="text"
                 v-model="answer"
                 placeholder="请输入答案"
-                class="px-4 py-[14px] border-2 border-gray-200 rounded-lg text-[15px] transition-all
+                class="px-4 py-3 border-2 border-gray-200 rounded-lg text-sm transition-all
                     duration-300 outline-none focus:border-[#667eea] focus:shadow-[0_0_0_3px_rgba(102,126,234,0.1)]
                     flex-1 min-w-0 text-gray-600 placeholder-gray-400 focus:outline-none"
                 autocomplete="off"

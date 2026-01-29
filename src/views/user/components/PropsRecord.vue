@@ -9,6 +9,7 @@ import {getSecureToken} from "@/utils/verify-key.ts";
 import {LOCALE_CURRENCY_MAP} from "@/i18n";
 import dayjs from "dayjs";
 import {useI18n} from "vue-i18n";
+import {onMounted} from "vue";
 
 const {locale} = useI18n()
 // 币种符号
@@ -73,8 +74,10 @@ const handleCopy = async (n: string, p: string) => {
   }
 };
 
-// 初始加载
-loadData()
+onMounted(() => {
+  // 初始加载
+  loadData();
+})
 </script>
 
 <template>

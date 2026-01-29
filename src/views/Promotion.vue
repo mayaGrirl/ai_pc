@@ -1,59 +1,37 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import MainLayout from '@/components/layout/MainLayout.vue'
+import { ChevronRight } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { recommendLink, recommendCustomers, receiveRecommendReward } from '@/api/customer'
 import type { RecommendCustomer } from '@/types/customer.type'
+import {useTable} from "@/composables/useTable.ts";
+import {getSecureToken} from "@/utils/verify-key.ts";
+import {useToast} from "@/composables/useToast.ts";
+import DataTable from "@/components/ui/DataTable.vue";
+import {useClipboard} from "@vueuse/core";
+import {PROMOTION_LEVEL_REWARDS} from "@/constants/constants.ts";
 
+const toast = useToast()
+const { copy, isSupported } = useClipboard()
 const authStore = useAuthStore()
-const customer = computed(() => authStore.currentCustomer)
 const isLogin = computed(() => authStore.isLogin)
-
 // 推广链接key
 const promotionKey = ref('')
-const loading = ref(false)
 
 // 推广链接文本
 const referralText = computed(() => {
-  const key = promotionKey.value || customer.value?.spread_code || ''
+  const key = promotionKey.value
   return `重磅推出工资系统，游戏就可以领取工资。另外每日幸运儿奖励千万豆豆作为奖励，幸运儿上线另外可以领取10%奖励！您还在等什么？赶快行动吧！您的推广地址：${window.location.origin}/register?tj=${key}`
 })
 
-// VIP等级奖励数据
-const levelRewards = ref([
-  { level: 0, experience: 0, reward: 0 },
-  { level: 1, experience: 500, reward: 10000 },
-  { level: 2, experience: 2000, reward: 30000 },
-  { level: 3, experience: 10000, reward: 80000 },
-  { level: 4, experience: 60000, reward: 160000 },
-  { level: 5, experience: 420000, reward: 300000 },
-  { level: 6, experience: 800000, reward: 500000 },
-  { level: 7, experience: 2000000, reward: 600000 },
-  { level: 8, experience: 8000000, reward: 700000 },
-  { level: 9, experience: 15000000, reward: 800000 },
-  { level: 10, experience: 30000000, reward: 900000 }
-])
-
-// 我推荐的用户列表
-const referralList = ref<RecommendCustomer[]>([])
-
-const formatNumber = (num: number | undefined) => {
-  return num?.toLocaleString() || '0'
-}
-
-// 格式化时间
-const formatTime = (timestamp: number | undefined) => {
-  if (!timestamp) return '-'
-  const date = new Date(timestamp * 1000)
-  return date.toLocaleDateString('zh-CN')
-}
-
-const copyUrl = () => {
-  const textarea = document.getElementById('textarea2') as HTMLTextAreaElement
-  if (textarea) {
-    textarea.select()
-    document.execCommand('Copy')
-    alert('已复制好，可贴粘。')
+// 复制邀请链接
+const copyUrl = async () => {
+  if (isSupported.value) {
+    await copy(referralText.value);
+    toast.success('已复制推广链接');
+  } else {
+    toast.error('您的浏览器不支持自动复制');
   }
 }
 
@@ -65,419 +43,231 @@ const loadPromotionLink = async () => {
       promotionKey.value = res.data.key
     }
   } catch (error) {
-    console.error('加载推广链接失败', error)
-  }
-}
-
-// 加载推广会员列表
-const loadRecommendCustomers = async () => {
-  loading.value = true
-  try {
-    const res = await recommendCustomers({
-      pagination: { page: 1, size: 50 }
-    })
-    if (res.code === 200 && res.data) {
-      referralList.value = res.data
-    }
-  } catch (error) {
-    console.error('加载推广会员失败', error)
-  } finally {
-    loading.value = false
+    console.error('加载推广链接失败', error);
+    toast.error('加载推广链接失败')
   }
 }
 
 // 一键领取投注提成
 const claimBetBonus = async () => {
   try {
-    const res = await receiveRecommendReward({ type: 1 })
+    const res = await receiveRecommendReward({ type: 34 })
     if (res.code === 200) {
-      alert(res.message || '领取成功')
-      loadRecommendCustomers()
+      toast.success('领取成功')
     } else {
-      alert(res.message || '领取失败')
+      toast.error(res.message || '领取失败')
     }
   } catch (error) {
-    alert('领取失败')
+    const msg = error instanceof Error ? error.message : '检测失败，刷新页面请重试';
+    toast.error(msg);
   }
 }
 
 // 一键领取升级奖励
 const claimUpgradeBonus = async () => {
   try {
-    const res = await receiveRecommendReward({ type: 2 })
+    const res = await receiveRecommendReward({ type: 9 })
     if (res.code === 200) {
-      alert(res.message || '领取成功')
-      loadRecommendCustomers()
+      toast.success('领取成功')
     } else {
-      alert(res.message || '领取失败')
+      toast.error(res.message || '领取失败')
     }
   } catch (error) {
-    alert('领取失败')
+    const msg = error instanceof Error ? error.message : '检测失败，刷新页面请重试';
+    toast.error(msg);
   }
 }
 
-// 生成近7天日期
-const getRecentDates = () => {
-  const dates = []
-  for (let i = 3; i <= 6; i++) {
-    const date = new Date()
-    date.setDate(date.getDate() - i)
-    const month = (date.getMonth() + 1).toString().padStart(2, '0')
-    const day = date.getDate().toString().padStart(2, '0')
-    dates.push(`${month}月${day}日`)
-  }
-  return dates
-}
+// 初始化表格
+const {
+  loading,
+  dataSource,
+  hasMore,
+  pagination,
+  loadData,
+  changePage,
+} = useTable<RecommendCustomer>(recommendCustomers, {
+  defaultSize: 10,
+  initQuery: {t: getSecureToken()}
+})
 
-const recentDates = getRecentDates()
+// 列配置
+const columns = [
+  { key: 'nickname', title: '昵称', width: '25%', align: 'center' as const },
+  { key: 'experience', title: '生态值', width: '25%', align: 'center' as const },
+  { key: 'tzpoints', title: '今日提成', width: '25%', align: 'center' as const },
+  { key: 'tgall', title: '累计提成', width: '25%', align: 'center' as const },
+]
 
 onMounted(() => {
-  if (isLogin.value) {
-    loadPromotionLink()
-    loadRecommendCustomers()
+  if (!isLogin.value) {
+    window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`
   }
+  loadPromotionLink();
+  loadData();
 })
 </script>
 
 <template>
   <MainLayout>
-    <div class="container spread-container">
-      <div class="spread_head"></div>
-      <div class="spread_head2"></div>
-      <div class="layui-main body spread">
-        <div class="spreadMain">
-          <div class="content-row">
-            <div class="content content-left">
-              <h2>最佳赚币途径</h2>
-              <p>
-                推荐好友一起来玩，成功推荐一个好友除了可赚取<font color="red">0.2%</font>投注提成外，还将获得高达<font color="red">168万</font>豆豆的好友升级奖励！
-                各等级奖励计划：<br>
-              </p>
-              <table class="layui-table">
-                <thead>
-                  <tr>
-                    <th>好友等级</th>
-                    <th>需要生态值</th>
-                    <th>获得好友升级奖励</th>
-                    <th>获得好友投注提成</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="item in levelRewards" :key="item.level">
-                    <td><img :src="`/skin/pc/wm/images/level/${item.level}.png`" width="25" /></td>
-                    <td>{{ item.experience }}</td>
-                    <td><span class="coin">{{ formatNumber(item.reward) }}</span></td>
-                    <td>0.2<span>%</span></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div class="content-right-wrap">
-              <div class="content">
-                <h2>生态值获取方式</h2>
-                <div>
-                  <a href="/news/help/?#m25">生态值(等级)的获取途径？</a>
-                </div>
+    <div class="min-h-screen bg-[#fcf9f4] relative overflow-x-hidden">
+      <!-- Background Images (Full Width) -->
+      <div class="absolute top-0 left-0 w-full z-0">
+        <div class="w-full h-[404px] bg-[url('/tg-1.jpg')] bg-no-repeat bg-top bg-cover"></div>
+        <div class="w-full h-[403px] bg-[url('/tg-2.jpg')] bg-no-repeat bg-top bg-cover"></div>
+      </div>
+
+      <!-- Main Content Area -->
+      <div class="relative z-10 max-w-[1300px] mx-auto pt-[400px] px-4 pb-20">
+        <div class="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl p-8 md:p-12">
+          <!-- 推广会员 -->
+          <div class="grid grid-cols-1 xl:grid-cols-[1fr_500px] gap-12 lg:gap-20">
+            <!-- Left Column: 规则 -->
+            <div class="space-y-8">
+              <div class="border-l-4 border-[#ff4757] pl-4">
+                <h2 class="text-3xl font-extrabold text-gray-900 tracking-tight">最佳赚币途径</h2>
+                <p class="mt-4 text-gray-600 leading-relaxed font-medium">
+                  推荐好友一起来玩，成功推荐一个好友除了可赚取
+                  <span class="text-[#ff4757] font-bold">0.2%</span> 投注提成外，还将获得高达
+                  <span class="text-[#ff4757] font-bold">168万</span> 豆豆的好友升级奖励！
+                </p>
+                <p class="text-sm text-gray-400 mt-1">各等级奖励计划：</p>
               </div>
-              <div class="content">
-                <h2>推广文本</h2>
-                <p>以下为您在本站专属的注册推荐地址，您可以通过微信、QQ、MSN等发给您的好友！</p>
+
+              <div class="overflow-x-auto rounded-xl border border-gray-100 shadow-sm">
+                <table class="w-full text-sm text-center">
+                  <thead class="bg-gray-50/50 text-gray-500 font-bold uppercase tracking-wider">
+                    <tr>
+                      <th class="py-2 px-2">好友等级</th>
+                      <th class="py-2 px-2">需要生态值</th>
+                      <th class="py-2 px-2">好友升级奖励</th>
+                      <th class="py-2 px-2">好友投注提成</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-50">
+                    <tr v-for="item in PROMOTION_LEVEL_REWARDS" :key="item.level" class="hover:bg-gray-50/50 transition-colors group">
+                      <td class="py-2 px-2">
+                        <div class="flex justify-center group-hover:scale-110 transition-transform">
+                          <img :src="`/skin/pc/wm/images/level/${item.level}.png`" class="w-6 h-6 object-contain" :alt="`Level ${item.level}`" />
+                        </div>
+                      </td>
+                      <td class="py-2 px-2 text-gray-700 font-medium">
+                        {{ $n(item.experience) }}
+                      </td>
+                      <td class="py-2 px-2">
+                        <div class="flex items-center justify-center gap-1">
+                          <span class="text-[#ff4757] font-bold text-base">{{ $n(item.reward) }}</span>
+                          <img src="/ranking/coin.png" class="w-3 h-3" alt="coin" />
+                        </div>
+                      </td>
+                      <td class="py-2 px-2 text-gray-900 font-bold">
+                        {{ item.rate }}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Right 推广文本 -->
+            <div class="space-y-10">
+              <!-- Ecovalue Info -->
+              <div class="bg-gradient-to-br from-blue-50 to-indigo-50/50 rounded-2xl p-8 border border-blue-100/50">
+                <h2 class="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <span class="w-1.5 h-6 bg-blue-500 rounded-full"></span>
+                  生态值获取方式
+                </h2>
+                <a href="/news/help/?#m25" class="text-blue-600 hover:text-blue-700 font-medium inline-flex items-center group">
+                  生态值(等级)的获取途径？
+                  <ChevronRight class="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
+                </a>
+              </div>
+
+              <!-- 复制邀请的链接 -->
+              <div class="bg-gradient-to-br from-orange-50 to-red-50/50 rounded-2xl p-8 border border-orange-100/50">
+                <h2 class="text-xl font-bold text-gray-900 mb-3 flex items-center gap-2">
+                  <span class="w-1.5 h-6 bg-orange-500 rounded-full"></span>
+                  推广文本
+                </h2>
+                <p class="text-sm text-gray-500 mb-4">
+                  以下为您在本站专属的注册推荐地址，您可以通过微信、QQ、MSN等发给您的好友！
+                </p>
                 <textarea
-                  name="textarea2"
                   id="textarea2"
-                  class="spreadTxt"
-                  cols="80"
-                  rows="3"
+                  class="w-full h-32 p-4 bg-white/80 border-2 border-orange-100 rounded-xl text-sm text-gray-600 focus:outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-400/10 transition-all resize-none mb-6 shadow-inner"
                   readonly
                   :value="referralText"
                 ></textarea>
-                <button class="layui-btn layui-btn-danger layui-btn-fluid" @click="copyUrl">复制推广链接</button>
+                <button
+                  class="w-full h-14 bg-gradient-to-r from-[#ff4757] to-[#ee5a6f] text-white font-bold text-lg rounded-xl shadow-lg shadow-red-200 hover:shadow-red-300 hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center justify-center gap-2 group"
+                  @click="copyUrl"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 group-hover:rotate-12 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                  </svg>
+                  复制推广链接
+                </button>
               </div>
             </div>
           </div>
-          <div class="myfrendwrap layui-clear">
-            <div class="titlewrap">
-              <h2 class="bigtitle pull-left">
-                我的近期收益
-                <span style="font-size:13px;font-weight:normal;padding-left:20px;color:red;">
-                  <span class="layui-icon layui-icon-about"></span> 今日奖励将在明天结算并开放领取！
-                </span>
-              </h2>
-              <form action="">
-                <button class="layui-btn layui-btn-danger pull-right" type="button" @click="claimBetBonus">一键领取投注提成</button>
-                <button class="layui-btn layui-btn-danger pull-right" type="button" style="margin-right:10px;" @click="claimUpgradeBonus">一键领取升级奖励</button>
-              </form>
+
+          <!-- 我推广的会员 -->
+          <div class="mt-20 pt-12 border-t border-gray-100">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
+              <div class="space-y-1">
+                <h2 class="text-2xl font-extrabold text-gray-900">我的近期收益</h2>
+                <div class="flex items-center text-[#ff4757] text-sm font-medium">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  今日奖励将在明天结算并开放领取！
+                </div>
+              </div>
+              <div class="flex flex-wrap gap-3">
+                <button
+                  class="h-11 px-6 bg-white border-2 border-red-500 text-red-500 font-bold rounded-lg hover:bg-red-50 active:scale-95 transition-all text-sm shadow-sm"
+                  @click="claimUpgradeBonus"
+                >
+                  一键领取升级奖励
+                </button>
+                <button
+                  class="h-11 px-6 bg-gradient-to-r from-[#ff4757] to-[#ee5a6f] text-white font-bold rounded-lg hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all text-sm shadow-md"
+                  @click="claimBetBonus"
+                >
+                  一键领取投注提成
+                </button>
+              </div>
             </div>
-            <table class="layui-table myfrendtable">
-              <thead>
-                <tr>
-                  <th>我推荐的用户</th>
-                  <th>生态值</th>
-                  <th>加入时间</th>
-                  <th>累计为我创收</th>
-                  <th>今天</th>
-                  <th>昨天</th>
-                  <th>前天</th>
-                  <th v-for="(date, index) in recentDates" :key="index">{{ date }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-if="loading">
-                  <td colspan="11" style="text-align:center;color:#999;padding:20px;">加载中...</td>
-                </tr>
-                <tr v-else-if="referralList.length === 0">
-                  <td colspan="11" style="text-align:center;color:#999;padding:20px;">暂无推荐用户</td>
-                </tr>
-                <tr v-else v-for="item in referralList" :key="item.id">
-                  <td>{{ item.nickname || '***' }}</td>
-                  <td>{{ formatNumber(item.experience) }}</td>
-                  <td>{{ formatTime(item.regtime) }}</td>
-                  <td class="coin">{{ formatNumber(item.tgall) }}</td>
-                  <td>-</td>
-                  <td>-</td>
-                  <td>-</td>
-                  <td v-for="(date, index) in recentDates" :key="index">-</td>
-                </tr>
-              </tbody>
-            </table>
+
+            <DataTable
+              :columns="columns"
+              :data="dataSource"
+              :loading="loading"
+              :pagination="pagination"
+              @change="changePage"
+              :hasMore="hasMore"
+            >
+              <template #column-experience="{ row }">
+                <span class="text-gray-900 font-bold">{{ $n(row.experience) }}</span>
+              </template>
+
+              <template #column-tzpoints="{ row }">
+                <div class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 rounded-full text-xs font-bold">
+                  {{ $n(row.tzpoints) }}
+                  <img src="/ranking/coin.png" class="w-3 h-3" alt="coin" />
+                </div>
+              </template>
+
+              <template #column-tgall="{ row }">
+                <div class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 text-orange-700 rounded-full text-xs font-bold">
+                  {{ $n(row.tgall) }}
+                  <img src="/ranking/coin.png" class="w-3 h-3" alt="coin" />
+                </div>
+              </template>
+            </DataTable>
           </div>
         </div>
       </div>
     </div>
   </MainLayout>
 </template>
-
-<style scoped>
-/* 页面背景 */
-.spread-container {
-  padding-top: 0;
-  background: #fcf9f4;
-  position: relative;
-}
-
-/* 头部背景图 - 使用100vw铺满整个视口宽度 */
-.spread_head {
-  width: 100vw;
-  height: 404px;
-  background: url('/tg-1.jpg') no-repeat center top;
-  background-size: cover;
-  position: relative;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.spread_head2 {
-  width: 100vw;
-  height: 403px;
-  background: url('/tg-2.jpg') no-repeat center top;
-  background-size: cover;
-  position: relative;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-/* 主体内容区 - 负边距叠加到背景上 */
-.layui-main.body.spread {
-  width: unset;
-  margin-top: -420px;
-}
-
-/* 内容白色卡片 */
-.spreadMain {
-  width: 1300px;
-  margin: auto;
-  clear: both;
-  position: relative;
-  background: rgba(255, 255, 255, 0.9);
-  padding: 30px;
-  border-radius: 5px;
-}
-
-/* 内容行 - 两列布局 */
-.content-row {
-  overflow: hidden;
-}
-
-.content-row::after {
-  content: '';
-  display: table;
-  clear: both;
-}
-
-/* 左侧内容 - 表格区 */
-.content-left {
-  float: left;
-  width: 620px;
-  padding-right: 50px;
-  box-sizing: border-box;
-}
-
-/* 右侧内容区 */
-.content-right-wrap {
-  float: right;
-  width: 620px;
-}
-
-.content-right-wrap .content {
-  margin-bottom: 30px;
-}
-
-/* 内容块通用样式 */
-.content {
-  text-align: left;
-}
-
-.content h2 {
-  margin-bottom: 5px;
-  font-size: 22px;
-  font-weight: 500;
-  color: #333;
-}
-
-.content p {
-  font-size: 14px;
-  color: #666;
-  line-height: 1.8;
-  margin-bottom: 10px;
-}
-
-.content a {
-  color: #f03736;
-  text-decoration: none;
-}
-
-.content a:hover {
-  text-decoration: underline;
-}
-
-/* 推广文本框 */
-.spreadTxt {
-  width: 100%;
-  padding: 8px;
-  font-size: 14px;
-  color: #666;
-  box-sizing: border-box;
-  margin-bottom: 15px;
-  height: 100px;
-  border: 3px solid #ccc;
-  background: #f5f5f5;
-  resize: none;
-}
-
-/* 表格 */
-.layui-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: #fff;
-}
-
-.layui-table th,
-.layui-table td {
-  padding: 2px 8px;
-  border: 1px solid #e6e6e6;
-  text-align: center;
-  font-size: 14px;
-}
-
-.layui-table th {
-  background: #fafafa;
-  font-weight: normal;
-  color: #666;
-}
-
-.layui-table td {
-  color: #666;
-}
-
-.layui-table td .coin {
-  color: #f03736;
-  font-weight: bold;
-}
-
-/* 按钮 */
-.content .layui-btn {
-  height: 50px;
-  line-height: 50px;
-  font-size: 18px;
-}
-
-.layui-btn {
-  background: #f03736;
-  border: none;
-  color: #fff;
-  cursor: pointer;
-  border-radius: 3px;
-  padding: 0 20px;
-}
-
-.layui-btn:hover {
-  background: #d32f2f;
-}
-
-.layui-btn-fluid {
-  width: 100%;
-  display: block;
-}
-
-/* 我的好友区域 */
-.myfrendwrap {
-  clear: both;
-  padding-top: 20px;
-  margin-top: 20px;
-  border-top: 1px solid #eee;
-}
-
-.bigtitle {
-  margin-bottom: 5px;
-  font-size: 22px;
-  font-weight: 500;
-  color: #333;
-}
-
-.titlewrap {
-  margin-bottom: 10px;
-  clear: both;
-  overflow: hidden;
-}
-
-.titlewrap .bigtitle {
-  line-height: 38px;
-}
-
-.titlewrap form {
-  float: right;
-}
-
-.titlewrap .layui-btn {
-  height: 38px;
-  line-height: 38px;
-  font-size: 14px;
-  padding: 0 15px;
-}
-
-.myfrendtable th,
-.myfrendtable td {
-  font-size: 12px;
-  padding: 8px 10px !important;
-}
-
-/* 通用类 */
-.pull-left {
-  float: left;
-}
-
-.pull-right {
-  float: right;
-}
-
-.layui-clear::after {
-  content: '';
-  display: table;
-  clear: both;
-}
-
-.myfrendtable .coin {
-  color: #f03736;
-  font-weight: bold;
-}
-</style>

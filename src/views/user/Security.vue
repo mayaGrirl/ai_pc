@@ -378,7 +378,7 @@ onMounted(() => {
                 <ErrorMessage name="confirm_password" class="text-[#ff4d4f] text-sm"/>
 
               </div>
-              <button type="submit" :disabled="isSubmitting" class="security-btn bg-[#ff6600]">
+              <button type="submit" :disabled="isSubmitting" class="security-btn bg-[#ff6b6b]">
                 {{ isSubmitting ? '提交中...' : '提交修改' }}
               </button>
             </form>

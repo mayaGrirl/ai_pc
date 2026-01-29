@@ -339,7 +339,7 @@ onMounted(() => {
 
             <button type="submit"
                     :disabled="isSubmitting"
-                    class="w-full py-3 bg-gradient-to-r from-[#ff6600] to-[#ff8533] text-white rounded-lg text-sm font-bold shadow-lg shadow-orange-500/30 hover:shadow-orange-500/40 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200">
+                    class="w-full py-3 bg-gradient-to-r from-[#ff6b6b] to-[#ee5a6f] text-white rounded-lg text-sm font-bold shadow-lg shadow-orange-500/30 hover:shadow-orange-500/40 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200">
               {{ isSubmitting ? '保存中...' : '保存资料' }}
             </button>
           </form>
@@ -391,7 +391,7 @@ onMounted(() => {
                     </button>
                     <button
                       @click="saveNickname"
-                      class="flex-1 py-1.5 bg-[#ff6600] text-white rounded text-xs hover:bg-[#ff5500] transition-colors"
+                      class="flex-1 py-1.5 bg-[#ff6b6b] text-white rounded text-xs hover:bg-[#ff6b6b] transition-colors"
                     >
                       确认
                     </button>
@@ -405,7 +405,7 @@ onMounted(() => {
                 <div v-if="!isEditingEmail" class="flex flex-col gap-3">
                   <button
                     @click="startEditEmail"
-                    class="w-full py-2 bg-white border border-gray-200 text-gray-700 rounded-md text-sm hover:border-[#ff6600] hover:text-[#ff6600] transition-colors flex items-center justify-center gap-2"
+                    class="w-full py-2 bg-white border border-gray-200 text-gray-700 rounded-md text-sm hover:border-[#ff6b6b] hover:text-[#ff6b6b] transition-colors flex items-center justify-center gap-2"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -432,7 +432,7 @@ onMounted(() => {
                     </button>
                     <button
                       @click="saveEmail"
-                      class="flex-1 py-1.5 bg-[#ff6600] text-white rounded text-xs hover:bg-[#ff5500] transition-colors"
+                      class="flex-1 py-1.5 from-[#ff6b6b] to-[#ee5a6f] text-white rounded text-xs hover:bg-[#ff6b6b] transition-colors"
                     >
                       确认
                     </button>

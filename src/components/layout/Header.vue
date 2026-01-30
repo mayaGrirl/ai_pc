@@ -3,6 +3,8 @@ import { computed, ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
+import { LogOut, RefreshCw, Smartphone, HeartPulse} from 'lucide-vue-next'
+import Relief from '@/components/relief.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -47,44 +49,7 @@ const calculateDailyGameCount = (): number => {
 const targetNumber = calculateDailyGameCount()
 
 // 领救济弹窗
-const showWelfareModal = ref(false)
-const verifyCode = ref('')
-
-// 救济金数据
-const welfareList = ref([
-  { level: 0, coins: 50, condition: '余额少于50，每日可领取10次', remaining: '-' },
-  { level: 1, coins: 60, condition: '余额少于60，每日可领取10次', remaining: '-' },
-  { level: 2, coins: 70, condition: '余额少于70，每日可领取10次', remaining: '10次' },
-  { level: 3, coins: 100, condition: '余额少于100，每日可领取10次', remaining: '-' },
-  { level: 4, coins: 120, condition: '余额少于120，每日可领取10次', remaining: '-' },
-  { level: 5, coins: 150, condition: '余额少于150，每日可领取10次', remaining: '-' },
-  { level: 6, coins: 200, condition: '余额少于200，每日可领取10次', remaining: '-' },
-  { level: 7, coins: 300, condition: '余额少于300，每日可领取10次', remaining: '-' },
-  { level: 8, coins: 500, condition: '余额少于500，每日可领取10次', remaining: '-' },
-  { level: 9, coins: 500, condition: '余额少于500，每日可领取10次', remaining: '-' },
-  { level: 10, coins: 500, condition: '余额少于500，每日可领取10次', remaining: '-' }
-])
-
-const openWelfareModal = () => {
-  showWelfareModal.value = true
-}
-
-const closeWelfareModal = () => {
-  showWelfareModal.value = false
-}
-
-const refreshVerifyCode = () => {
-  // 刷新验证码
-  alert('刷新验证码')
-}
-
-const claimWelfare = () => {
-  if (!verifyCode.value) {
-    alert('请输入验证码')
-    return
-  }
-  alert('领取救济金功能开发中')
-}
+const showWelfareModal = ref<boolean>(false)
 
 const navItems = [
   { name: '首页', path: '/', key: 'index' },
@@ -157,521 +122,132 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="jt">
+  <header class="w-full bg-white border-b-[3px] border-gray-100 sticky top-0 z-[1000]">
     <!-- Top Bar -->
-    <div class="jt_top">
-      <div class="jt_top_nei">
-        <div class="left">
+    <div class="w-full h-9 bg-gray-50 border-b border-gray-200/50">
+      <div class="max-w-[1200px] h-full mx-auto px-4 flex justify-between items-center text-[12px]">
+        <!-- Top Left: Mobile & Welfare -->
+        <div class="flex items-center gap-4 h-full">
+          <a :href="sysConfig?.h5_url || '#'" target="_blank" class="flex items-center gap-1.5 text-gray-600 hover:text-[#ff4757] transition-colors h-full group">
+            <Smartphone class="w-4 h-4 text-blue-500 group-hover:scale-110 transition-transform" />
+            <span>手机版</span>
+          </a>
+          <span class="text-gray-300">|</span>
+          <button @click="showWelfareModal = true" class="flex items-center gap-1.5 text-gray-600 hover:text-[#ff4757] transition-colors h-full group">
+            <HeartPulse class="w-4 h-4 text-[#ff4757] animate-pulse" />
+            <span>领救济</span>
+          </button>
+        </div>
+
+        <!-- Top Right: Welcome & Login Status -->
+        <div class="flex items-center gap-4">
           <template v-if="isLogin">
-            <p>{{ customer?.nickname || '_sg' + customer?.id }} ID：<router-link to="/user"><span style="color:#ff3a3a;">{{ customer?.id }}</span></router-link></p>
-            <dd><a href="javascript:void(0)" @click="handleLogout" style="color: #aeaeae;">[退出]</a></dd>
-            <dd>|</dd>
-            <dd><router-link style="color:#333;" to="/user/detail">余额：<b>{{ formatNumber(customer?.points || 0) }}</b></router-link></dd>
-            <dd>|</dd>
-            <dd><a href="javascript:void(0)" @click="authStore.fetchCurrentCustomer()">[刷新]</a></dd>
+            <div class="flex items-center gap-2 group">
+              <span class="text-gray-500">{{ customer?.nickname || '_sg' + customer?.id }}</span>
+              <span class="text-gray-400">ID:</span>
+              <router-link to="/user" class="text-[#ff4757] font-bold hover:underline">
+                {{ customer?.id }}
+              </router-link>
+            </div>
+            <div class="h-3 w-px bg-gray-300"></div>
+            <router-link to="/user/detail" class="flex items-center gap-1 text-gray-700 hover:text-[#ff4757] transition-colors">
+              <span>余额:</span>
+              <b class="text-[#ff4757]">{{ formatNumber(customer?.points || 0) }}</b>
+            </router-link>
+            <button @click="authStore.fetchCurrentCustomer()" class="text-gray-400 hover:text-gray-600 transition-colors p-1 group">
+              <RefreshCw class="w-3.5 h-3.5 group-active:rotate-180 transition-transform duration-500" />
+            </button>
+            <div class="h-3 w-px bg-gray-300"></div>
+            <button @click="handleLogout" class="text-gray-400 hover:text-gray-600 flex items-center gap-1 group">
+              <LogOut class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+              <span>[退出]</span>
+            </button>
           </template>
           <template v-else>
-            <p>您好，欢迎来鼎丰!</p>
-            <dd><router-link to="/login">登录</router-link></dd>
-            <dd>|</dd>
-            <dd><router-link to="/register">注册</router-link></dd>
+            <span class="text-gray-500">您好，欢迎来鼎丰!</span>
+            <div class="flex items-center gap-3">
+              <router-link to="/login" class="text-gray-600 hover:text-[#ff4757] transition-colors">登录</router-link>
+              <span class="text-gray-300">|</span>
+              <router-link to="/register" class="text-gray-600 hover:text-[#ff4757] transition-colors font-medium">注册</router-link>
+            </div>
           </template>
         </div>
-        <div class="right">
-          <ul>
-            <li class="phone">
-              <a :href="sysConfig?.h5_url || 'javascript:void(0)'" :target="sysConfig?.h5_url ? '_blank' : '_self'"><img src="/phone.png" class="phone-icon"> 手机版</a>
-            </li>
-            <li>|</li>
-            <li><a href="javascript:void(0)" @click="openWelfareModal">领救济</a></li>
-          </ul>
-        </div>
       </div>
     </div>
 
-    <!-- 领救济弹窗 -->
-    <div v-if="showWelfareModal" class="welfare-modal-overlay" @click.self="closeWelfareModal">
-      <div class="welfare-modal">
-        <div class="welfare-modal-close" @click="closeWelfareModal">×</div>
-        <div class="welfare-modal-content">
-          <table class="welfare-table">
-            <thead>
-              <tr>
-                <th>等级</th>
-                <th>可领取金币</th>
-                <th>条件</th>
-                <th>剩余次数</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="item in welfareList" :key="item.level">
-                <td><img :src="`/skin/pc/wm/images/level/${item.level}.png`" width="25" /></td>
-                <td class="coins">{{ item.coins }} <img src="/skin/pc/wm/images/coin.png" width="16" class="coin-img" /></td>
-                <td class="condition">{{ item.condition }}</td>
-                <td>{{ item.remaining }}</td>
-              </tr>
-            </tbody>
-          </table>
-          <div class="welfare-form">
-            <div class="verify-input">
-              <span>验证码</span>
-              <input type="text" v-model="verifyCode" placeholder="" />
-              <a href="javascript:void(0)" @click="refreshVerifyCode" class="refresh-code">换一张</a>
-            </div>
-            <button class="claim-btn" @click="claimWelfare">立即领取</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Main Navigation -->
-    <div class="jt_end jt_end_box">
-      <router-link class="logos" to="/">
-        <img src="/n_logo.png" height="63" alt="Logo">
+    <!-- 菜单 -->
+    <div class="max-w-[1200px] h-20 mx-auto px-4 flex items-center justify-between">
+      <!-- Logo -->
+      <router-link to="/" class="shrink-0 hover:opacity-90 transition-opacity">
+        <img src="/n_logo.png" class="h-[52px] w-auto" alt="Logo">
       </router-link>
 
       <!-- Game Counter -->
-      <div class="pcdd_number">
-        <div class="header_xnkl">
-          <b>累计游戏人次</b>
+      <div class="hidden lg:flex flex-col items-center gap-1 px-8">
+        <span class="text-[11px] font-bold text-gray-400 uppercase tracking-widest">累计游戏人次</span>
+        <div class="flex items-end gap-1">
+          <template v-for="(digit, index) in gameCountDigits" :key="index">
+            <div v-if="index === 1 || index === 4" class="text-[#ff4757] font-bold text-lg leading-6 mx-0.5 mb-1 animate-pulse">,</div>
+            <div class="w-6 h-9 bg-gradient-to-b from-white to-gray-50 border border-gray-200 rounded-md shadow-sm flex items-center justify-center text-xl font-black text-[#ff4757] relative overflow-hidden">
+              <div class="absolute inset-x-0 top-0 h-px bg-white/80"></div>
+              <span>{{ digit }}</span>
+              <div class="absolute inset-x-0 bottom-0 h-[2px] bg-[#ff4757]/20"></div>
+            </div>
+          </template>
+          <div class="w-6 h-9 bg-gradient-to-b from-white to-gray-50 border border-gray-200 rounded-md shadow-sm flex items-center justify-center text-xl font-black text-[#ff4757] relative overflow-hidden">
+            <div class="absolute inset-x-0 top-0 h-px bg-white/80"></div>
+            <span>0</span>
+            <div class="absolute inset-x-0 bottom-0 h-[2px] bg-[#ff4757]/20"></div>
+          </div>
         </div>
-        <ul id="ulTotalBuy">
-          <li class="pcdd_num">{{ gameCountDigits[0] }}</li>
-          <li class="pcdd_nobor">,</li>
-          <li class="pcdd_num">{{ gameCountDigits[1] }}</li>
-          <li class="pcdd_num">{{ gameCountDigits[2] }}</li>
-          <li class="pcdd_num">{{ gameCountDigits[3] }}</li>
-          <li class="pcdd_nobor">,</li>
-          <li class="pcdd_num">{{ gameCountDigits[4] }}</li>
-          <li class="pcdd_num">{{ gameCountDigits[5] }}</li>
-          <li class="pcdd_num">0</li>
-        </ul>
       </div>
 
       <!-- Navigation Menu -->
-      <ul class="jt_nav">
-        <li v-for="item in navItems" :key="item.path">
-          <template v-if="item.external">
-            <a :href="item.path" target="_blank">{{ item.name }}</a>
-          </template>
-          <template v-else>
-            <router-link :to="item.path" :class="{ list: isActive(item.path) }">{{ item.name }}</router-link>
-          </template>
-          <w v-if="item.badge" class="ico-num">{{ item.badge }}<em></em></w>
-        </li>
-      </ul>
+      <nav class="h-full">
+        <ul class="flex items-center h-full gap-1">
+          <li v-for="item in navItems" :key="item.path" class="relative group h-full">
+            <template v-if="item.external">
+              <a :href="item.path" target="_blank" class="h-full flex items-center px-4 text-[15px] font-bold text-gray-600 hover:text-[#ff4757] transition-all relative">
+                {{ item.name }}
+              </a>
+            </template>
+            <template v-else>
+              <router-link :to="item.path"
+                class="h-full flex items-center px-4 text-[15px] font-bold transition-all relative z-10"
+                :class="isActive(item.path) ? 'text-[#ff4757]' : 'text-gray-600 hover:text-[#ff4757]'"
+              >
+                {{ item.name }}
+                <!-- Active Indicator -->
+                <div v-if="isActive(item.path)" class="absolute bottom-0 left-4 right-4 h-0.5 bg-[#ff4757] rounded-t-full shadow-[0_-2px_6px_rgba(255,71,87,0.3)]"></div>
+                <div v-else class="absolute bottom-0 left-4 right-4 h-0.5 bg-[#ff4757] rounded-t-full scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-center opacity-40"></div>
+              </router-link>
+            </template>
+
+            <!-- Badge -->
+            <div v-if="item.badge" class="absolute top-[18px] right-1 z-20 pointer-events-none">
+              <div class="bg-[#ff413d] text-white text-[9px] px-1.5 py-0.5 rounded shadow-lg animate-bounce flex items-center gap-0.5 whitespace-nowrap font-bold uppercase tracking-tighter">
+                {{ item.badge }}
+                <div class="absolute -bottom-1 left-1.5 w-1.5 h-1.5 bg-[#ff413d] rotate-45"></div>
+              </div>
+            </div>
+          </li>
+        </ul>
+      </nav>
     </div>
-  </div>
+
+    <!-- 领取救济 -->
+    <Teleport to="body" v-if="showWelfareModal">
+      <Relief @close="showWelfareModal = false" />
+    </Teleport>
+  </header>
 </template>
 
 <style scoped>
-/* Reset */
-body, div, ul, ol, li, form, input, textarea, p {
-  margin: 0;
-  padding: 0;
-}
-
-dl, dt, dd, ul, li, p, h1, img, form {
-  list-style: none;
-  border: none;
-}
-
-ul {
-  list-style-type: none;
-}
-
-a {
-  color: #666;
-  text-decoration: none;
-}
-
-/* Header Container */
-.jt {
-  width: 100%;
-  height: auto;
-  border-bottom: 3px solid #dfdfdf;
-  background-color: #ffffff;
-}
-
-/* Top Bar */
-.jt .jt_top {
-  width: 100%;
-  height: 31px;
-  border-bottom: 1px solid #f2f1f1;
-  font-size: 12px;
-  background: #fafafa;
-}
-
-.jt .jt_top .jt_top_nei {
-  width: 1200px;
-  height: 31px;
-  line-height: 31px;
-  margin: 0 auto;
-}
-
-.jt .jt_top .jt_top_nei .left {
-  float: right;
-  display: inline-block;
-}
-
-.jt .jt_top .jt_top_nei .left p,
-.jt .jt_top .jt_top_nei .left dd {
-  float: left;
-  display: inline-block;
-}
-
-.jt .jt_top .jt_top_nei .left p {
-  margin-right: 10px;
-  color: #666;
-}
-
-.jt .jt_top .jt_top_nei .left dd {
-  margin: auto 2px;
-  color: #d3ccd3;
-}
-
-.jt .jt_top .jt_top_nei .left dd a:hover {
-  color: #f03736;
-}
-
-.jt .jt_top .jt_top_nei .left dd b {
-  color: #f03736;
-}
-
-.jt .jt_top .jt_top_nei .right {
-  float: left;
-}
-
-.jt .jt_top .jt_top_nei .right ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.jt .jt_top .jt_top_nei .right ul li {
-  float: left;
-  color: #d2ccd2;
-  margin: 0 3px;
-  line-height: 31px;
-}
-
-.jt .jt_top .jt_top_nei .right ul li a {
-  color: #666;
-  line-height: 31px;
-}
-
-.jt .jt_top .jt_top_nei .right ul li a:hover,
-.jt .jt_top .jt_top_nei .right ul li a.list {
-  color: #f03736;
-}
-
-.jt .jt_top .jt_top_nei .right ul li.phone a {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-}
-
-.jt .jt_top .jt_top_nei .right ul li.phone .phone-icon {
-  width: 14px;
-  height: 14px;
-  vertical-align: middle;
-}
-
-/* Main Navigation Bar */
-.jt .jt_end_box {
-  width: 1200px;
-  height: 80px;
-  overflow: hidden;
-  margin: 0 auto;
-}
-
-.jt .jt_end_box .logos {
-  float: left;
-  width: 152px;
-  height: 72px;
-  margin-top: 9px;
-}
-
-.jt .jt_end_box .logos img {
-  height: 63px;
-  width: auto;
-}
-
-/* Game Counter */
-.jt .jt_end_box .pcdd_number {
-  font-size: 20px;
-  width: 270px;
-  height: 54px;
-  line-height: 1;
-  padding-top: 6px;
-  padding-left: 5px;
-  float: left;
-}
-
-.jt .jt_end_box .pcdd_number .header_xnkl {
-  padding-bottom: 5px;
-  display: inline-block;
-  float: left;
-  margin: 1px 61px 0 0;
-  width: 100%;
-}
-
-.jt .jt_end_box .pcdd_number .header_xnkl b {
-  font-size: 14px;
-  color: #808080;
-  font-weight: bold;
-  line-height: 30px !important;
-  float: left;
-  margin-right: 15px;
-}
-
-.jt .jt_end_box .pcdd_number ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.jt .jt_end_box .pcdd_number li {
-  float: left;
-  width: 21px;
-  height: 27px;
-  text-align: center;
-  line-height: 27px;
-  color: #f03736;
-  display: block;
-  overflow: hidden;
-  position: relative;
-  border: 1px solid #dddddd;
-  margin: 0 2px;
-}
-
-.jt .jt_end_box .pcdd_number li.pcdd_num {
-  background: url('/number_line.png') repeat-x;
-}
-
-.jt .jt_end_box .pcdd_number .pcdd_nobor {
-  background: none;
-  border: 0;
-}
-
-/* Navigation Menu */
-.jt .jt_end_box ul.jt_nav {
-  float: right;
-  height: 73px;
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.jt .jt_end_box ul.jt_nav li {
-  float: left;
-  font-size: 16px;
-  height: 73px;
-  position: relative;
-}
-
-.jt .jt_end_box ul.jt_nav li a {
-  color: #6b6b6b;
-  display: inline-block;
-  line-height: 69px;
-  font-size: 16px;
-  font-weight: 600;
-  margin: 8px 0 0 0;
-  padding: 0 16px;
-  font-family: Microsoft YaHei, "\5b8b\4f53", Tahoma, Helvetica, Arial, sans-serif;
-}
-
-.jt .jt_end_box ul.jt_nav li a.list {
-  color: #fa4c4b;
-  border-bottom: 3px solid #fa4c4b;
-}
-
-.jt .jt_end_box ul.jt_nav li a:hover {
-  color: #fa4c4b;
-}
-
-/* Badge */
-.jt .jt_end_box ul.jt_nav li .ico-num {
-  width: auto;
-  height: 14px;
-  padding: 0 3px;
-  line-height: 14px;
-  border-radius: 2px;
-  font-size: 11px;
-  color: #FFF;
-  background: #ff413d;
-  position: absolute;
-  top: 15px;
-  right: 0;
-  z-index: 2;
-  display: block;
-  white-space: nowrap;
-  animation: updown .8s infinite ease-in-out;
-}
-
-.jt .jt_end_box ul.jt_nav li .ico-num em {
-  position: absolute;
-  bottom: -4px;
-  left: 4px;
-  overflow: hidden;
-  font-size: 0;
-  line-height: 0;
-  border: 3px solid #ff413d;
-  border-color: #ff413d transparent transparent #ff413d;
-}
-
-@keyframes updown {
-  0%, 100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(4px);
-  }
-}
-
-/* 领救济弹窗样式 */
-.welfare-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 9999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.welfare-modal {
-  background: #fff;
-  border-radius: 5px;
-  width: 850px;
-  max-height: 80vh;
-  position: relative;
-  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
-}
-
-.welfare-modal-close {
-  position: absolute;
-  top: -15px;
-  right: -15px;
-  width: 30px;
-  height: 30px;
-  background: #999;
-  border-radius: 50%;
-  color: #fff;
-  font-size: 20px;
-  line-height: 28px;
-  text-align: center;
-  cursor: pointer;
-  z-index: 10;
-}
-
-.welfare-modal-close:hover {
-  background: #666;
-}
-
-.welfare-modal-content {
-  padding: 20px;
-  max-height: calc(80vh - 40px);
-  overflow-y: auto;
-}
-
-.welfare-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-
-.welfare-table th,
-.welfare-table td {
-  padding: 10px 15px;
-  border-bottom: 1px solid #eee;
-  text-align: left;
-}
-
-.welfare-table th {
-  color: #666;
-  font-weight: normal;
-  background: #fafafa;
-}
-
-.welfare-table td {
-  color: #333;
-}
-
-.welfare-table td.coins {
-  color: #f03736;
-  font-weight: bold;
-  white-space: nowrap;
-}
-
-.welfare-table td.coins .coin-img {
-  display: inline-block;
-  vertical-align: middle;
-  margin-left: 3px;
-}
-
-.welfare-table td.condition {
-  color: #666;
-}
-
-.welfare-table td img {
-  vertical-align: middle;
-}
-
-.welfare-form {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
-  padding: 20px 0 10px;
-  border-top: 1px solid #eee;
-  margin-top: 10px;
-}
-
-.verify-input {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.verify-input span {
-  color: #666;
-  font-size: 14px;
-}
-
-.verify-input input {
-  width: 100px;
-  height: 32px;
-  border: 1px solid #ddd;
-  border-radius: 3px;
-  padding: 0 10px;
-  font-size: 14px;
-}
-
-.verify-input .refresh-code {
-  color: #1890ff;
-  font-size: 14px;
-  text-decoration: none;
-}
-
-.verify-input .refresh-code:hover {
-  text-decoration: underline;
-}
-
-.claim-btn {
-  background: #f03736;
-  color: #fff;
-  border: none;
-  padding: 10px 30px;
-  font-size: 14px;
-  border-radius: 3px;
-  cursor: pointer;
-}
-
-.claim-btn:hover {
-  background: #d32f2f;
+/* No more legacy styles needed, use Tailwind! */
+/* Logic for special navigation indicators left here if Tailwind isn't enough */
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(0.98); }
 }
 </style>
+

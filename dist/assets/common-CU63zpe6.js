@@ -1,1 +1,0 @@
-import{h as t}from"./MainLayout-snc9tKFv.js";const o=e=>t.get(`/api/app/v1/block/identifier/${e}`,{}),r=()=>t.get("/api/app/v1/customer-level/options",{}),i=()=>t.get("/api/app/v1/r-key",{});export{r as a,o as g,i as h};

@@ -6,7 +6,7 @@ import { login, loginSendSmsToMobile } from '@/api/auth'
 import { httpConfigRKey } from '@/api/common'
 import SodiumEncryptor from '@/utils/sodium'
 import { useToast } from '@/composables/useToast'
-import { Smartphone, Lock, ShieldCheck, User, MessageSquare } from 'lucide-vue-next'
+import { Smartphone, Lock, ShieldCheck, User, MessageSquare, Eye, EyeOff } from 'lucide-vue-next'
 
 const props = defineProps({
   redirect: {
@@ -27,6 +27,7 @@ const authStore = useAuthStore()
 const toast = useToast()
 
 const loginType = ref<'password' | 'sms'>('password')
+const showPassword = ref(false)
 const loading = ref(false)
 const publicKey = ref('')
 const countdown = ref(0)
@@ -216,11 +217,18 @@ const handleLogin = async () => {
           </div>
           <input
             v-model="form.password"
-            type="password"
+            :type="showPassword ? 'text' : 'password'"
             placeholder="请输入您的登录密码"
             :class="compact ? 'py-1' : 'py-4'"
-            class="w-full pl-12 pr-4 bg-gray-50 border-transparent focus:bg-white focus:border-[#ff4757] focus:ring-4 focus:ring-red-50 rounded-2xl text-gray-700 font-medium transition-all outline-none border-2"
+            class="w-full pl-12 pr-12 bg-gray-50 border-transparent focus:bg-white focus:border-[#ff4757] focus:ring-4 focus:ring-red-50 rounded-2xl text-gray-700 font-medium transition-all outline-none border-2"
           />
+          <button 
+            type="button"
+            @click="showPassword = !showPassword"
+            class="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <component :is="showPassword ? EyeOff : Eye" class="w-5 h-5" />
+          </button>
         </div>
       </div>
 

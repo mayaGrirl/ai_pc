@@ -1,20 +1,22 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import {ref, reactive, onMounted, onUnmounted, computed} from 'vue'
 import { useRouter } from 'vue-router'
 import { forgotPasswordSendSms, forgotPasswordVerifyCode, forgetPasswordReset } from '@/api/auth'
 import { httpConfigRKey } from '@/api/common'
 import SodiumEncryptor from '@/utils/sodium'
 import MainLayout from '@/components/layout/MainLayout.vue'
 import { useToast } from '@/composables/useToast'
-import { Smartphone, ShieldCheck, Lock, CheckCircle2, ArrowLeft, ArrowRight, ChevronRight, MessageSquare } from 'lucide-vue-next'
+import { Smartphone, ShieldCheck, Lock, CheckCircle2, ArrowLeft, ArrowRight, ChevronRight, MessageSquare, Eye, EyeOff } from 'lucide-vue-next'
 
 const router = useRouter()
 const toast = useToast()
 
-const currentStep = ref(2) // 1: Verify, 2: Reset, 3: Success
-const loading = ref(false)
-const countdown = ref(0)
-const publicKey = ref('')
+const currentStep = ref<number>(1) // 1: Verify, 2: Reset, 3: Success
+const loading = ref<boolean>(false)
+const showPassword = ref<boolean>(false)
+const showConfirmPassword = ref<boolean>(false)
+const countdown = ref<number>(0)
+const publicKey = ref<string>('')
 let timer: any = null
 
 const form = reactive({
@@ -96,9 +98,29 @@ const handleVerify = async () => {
   }
 }
 
+// 密码强度计算
+const passwordStrength = computed(() => {
+  const pwd = form.password
+  if (!pwd) return 0
+  let strength = 0
+  if (pwd.length >= 6) strength++
+  if (pwd.length >= 8) strength++
+  if (/[A-Z]/.test(pwd)) strength++
+  if (/[0-9]/.test(pwd)) strength++
+  return Math.min(strength, 4)
+})
+const strengthText = computed(() => {
+  const texts = ['太简单', '弱', '中', '强', '极强']
+  return texts[passwordStrength.value]
+})
+const strengthColor = computed(() => {
+  const colors = ['bg-gray-100', 'bg-red-400', 'bg-orange-400', 'bg-yellow-400', 'bg-green-500']
+  return colors[passwordStrength.value]
+})
+
 const handleReset = async () => {
   if (!form.password || form.password.length < 8) {
-    toast.error('密码长度至少为6位')
+    toast.error('密码长度至少为8位')
     return
   }
   if (form.password !== form.confirm_password) {
@@ -251,10 +273,32 @@ const handleReset = async () => {
               </div>
               <input
                 v-model="form.password"
-                type="password"
+                :type="showPassword ? 'text' : 'password'"
                 placeholder="建议包含字母和数字"
-                class="w-full pl-12 pr-4 py-4 bg-gray-50 border-transparent focus:bg-white focus:border-[#ff4757] focus:ring-4 focus:ring-red-50 rounded-2xl text-gray-700 font-medium transition-all outline-none border-2"
+                class="w-full pl-12 pr-12 py-4 bg-gray-50 border-transparent focus:bg-white focus:border-[#ff4757] focus:ring-4 focus:ring-red-50 rounded-2xl text-gray-700 font-medium transition-all outline-none border-2"
               />
+              <button
+                type="button"
+                @click="showPassword = !showPassword"
+                class="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <component :is="showPassword ? EyeOff : Eye" class="w-5 h-5" />
+              </button>
+            </div>
+
+            <!-- Password Strength -->
+            <div v-if="form.password" class="px-1 pt-1 flex items-center justify-between">
+              <div class="flex gap-1 flex-1 max-w-[160px]">
+                <div
+                  v-for="i in 4"
+                  :key="i"
+                  class="h-1.5 flex-1 rounded-full transition-all duration-500"
+                  :class="i <= passwordStrength ? strengthColor : 'bg-gray-100'"
+                ></div>
+              </div>
+              <span class="text-[11px] font-bold" :class="passwordStrength > 0 ? 'text-gray-500' : 'text-gray-300'">
+                强度: {{ strengthText }}
+              </span>
             </div>
           </div>
 
@@ -266,10 +310,17 @@ const handleReset = async () => {
               </div>
               <input
                 v-model="form.confirm_password"
-                type="password"
+                :type="showConfirmPassword ? 'text' : 'password'"
                 placeholder="请再次确认您的新密码"
-                class="w-full pl-12 pr-4 py-4 bg-gray-50 border-transparent focus:bg-white focus:border-[#ff4757] focus:ring-4 focus:ring-red-50 rounded-2xl text-gray-700 font-medium transition-all outline-none border-2"
+                class="w-full pl-12 pr-12 py-4 bg-gray-50 border-transparent focus:bg-white focus:border-[#ff4757] focus:ring-4 focus:ring-red-50 rounded-2xl text-gray-700 font-medium transition-all outline-none border-2"
               />
+              <button
+                type="button"
+                @click="showConfirmPassword = !showConfirmPassword"
+                class="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <component :is="showConfirmPassword ? EyeOff : Eye" class="w-5 h-5" />
+              </button>
             </div>
           </div>
 

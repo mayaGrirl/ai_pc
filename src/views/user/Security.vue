@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {computed, onMounted, ref, watch} from "vue";
-import {ChevronRight, Lock, ShieldCheck, HelpCircle, Gift, Eye} from "lucide-vue-next";
+import {ChevronRight, Lock, ShieldCheck, HelpCircle, Gift, Eye, EyeOff} from "lucide-vue-next";
 import UserLayout from '@/components/layout/UserLayout.vue'
 import {useToast} from "@/composables/useToast";
 import {
@@ -31,6 +31,8 @@ const activeTab = ref<TabKey>('LOGIN_PWD');
 
 // 表单提交loading
 const formLoading = ref<boolean>(false);
+const showPassword = ref<boolean>(false);
+const showConfirmPassword = ref<boolean>(false);
 // 是否设置过密保
 const isShowSecurityPass = computed(() => {
   if (!customer.value) return false;
@@ -351,18 +353,40 @@ onMounted(() => {
               <div class="space-y-4">
                 <div class="space-y-1.5">
                   <label class="text-xs font-bold text-gray-500 ml-1 uppercase" for="password">新密码</label>
-                  <input id="password" v-model="password" type="password" placeholder="请输入新密码"
-                         class="security-input"
-                         autocomplete="off"
-                         spellcheck="false"/>
+                  <div class="relative">
+                    <input id="password" v-model="password"
+                           :type="showPassword ? 'text' : 'password'"
+                           placeholder="请输入新密码"
+                           class="security-input"
+                           autocomplete="off"
+                           spellcheck="false"/>
+                    <button
+                      type="button"
+                      @click="showPassword = !showPassword"
+                      class="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
+                    >
+                      <component :is="showPassword ? EyeOff : Eye" class="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
                 <ErrorMessage name="password" class="text-[#ff4d4f] text-sm"/>
                 <div class="space-y-1.5">
                   <label class="text-xs font-bold text-gray-500 ml-1 uppercase" for="confirm_password">确认新密码</label>
-                  <input id="confirm_password" v-model="confirm_password" type="password" placeholder="请再次输入新密码"
-                         autocomplete="off"
-                         spellcheck="false"
-                         class="security-input"/>
+                  <div class="relative">
+                    <input id="confirm_password" v-model="confirm_password"
+                           :type="showConfirmPassword ? 'text' : 'password'"
+                           placeholder="请再次输入新密码"
+                           autocomplete="off"
+                           spellcheck="false"
+                           class="security-input"/>
+                    <button
+                      type="button"
+                      @click="showConfirmPassword = !showConfirmPassword"
+                      class="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
+                    >
+                      <component :is="showConfirmPassword ? EyeOff : Eye" class="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
                 <ErrorMessage name="confirm_password" class="text-[#ff4d4f] text-sm"/>
 
@@ -375,7 +399,7 @@ onMounted(() => {
                     />
                   </div>
                 </div>
-                <ErrorMessage name="confirm_password" class="text-[#ff4d4f] text-sm"/>
+                <ErrorMessage name="verify_code" class="text-[#ff4d4f] text-sm"/>
 
               </div>
               <button type="submit" :disabled="isSubmitting" class="security-btn bg-[#ff6b6b]">

@@ -7,16 +7,18 @@ import SodiumEncryptor from '@/utils/sodium'
 import MainLayout from '@/components/layout/MainLayout.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
-import { Smartphone, ShieldCheck, Lock, UserPlus, ArrowLeft, ArrowRight, MessageSquare, CheckCircle2 } from 'lucide-vue-next'
+import { Smartphone, ShieldCheck, Lock, UserPlus, ArrowLeft, ArrowRight, MessageSquare, Eye, EyeOff } from 'lucide-vue-next'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 const toast = useToast()
 
-const loading = ref(false)
-const countdown = ref(0)
-const publicKey = ref('')
+const loading = ref<boolean>(false)
+const showPassword = ref<boolean>(false)
+const showConfirmPassword = ref<boolean>(false)
+const countdown = ref<number>(0)
+const publicKey = ref<string>('')
 let timer: any = null
 
 // 推荐人key (从URL读取)
@@ -77,6 +79,7 @@ const strengthColor = computed(() => {
   return colors[passwordStrength.value]
 })
 
+// 发送验证码
 const handleSendCode = async () => {
   if (!form.mobile || !/^1[3-9]\d{9}$/.test(form.mobile)) {
     toast.error('请输入正确的11位手机号')
@@ -105,8 +108,8 @@ const handleRegister = async () => {
     toast.error('请输入短信验证码')
     return
   }
-  if (!form.password || form.password.length < 6) {
-    toast.error('密码长度至少为6位')
+  if (!form.password || form.password.length < 8) {
+    toast.error('密码长度至少为8位')
     return
   }
   if (form.password !== form.confirm_password) {
@@ -226,10 +229,17 @@ const handleRegister = async () => {
               </div>
               <input
                 v-model="form.password"
-                type="password"
+                :type="showPassword ? 'text' : 'password'"
                 placeholder="密码不少于6位"
-                class="w-full pl-12 pr-4 py-4 bg-gray-50 border-transparent focus:bg-white focus:border-[#ff4757] focus:ring-4 focus:ring-red-50 rounded-2xl text-gray-700 font-medium transition-all outline-none border-2"
+                class="w-full pl-12 pr-12 py-4 bg-gray-50 border-transparent focus:bg-white focus:border-[#ff4757] focus:ring-4 focus:ring-red-50 rounded-2xl text-gray-700 font-medium transition-all outline-none border-2"
               />
+              <button
+                type="button"
+                @click="showPassword = !showPassword"
+                class="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <component :is="showPassword ? EyeOff : Eye" class="w-5 h-5" />
+              </button>
             </div>
 
             <!-- Password Strength -->
@@ -257,10 +267,17 @@ const handleRegister = async () => {
               </div>
               <input
                 v-model="form.confirm_password"
-                type="password"
+                :type="showConfirmPassword ? 'text' : 'password'"
                 placeholder="请再次填写您的密码"
-                class="w-full pl-12 pr-4 py-4 bg-gray-50 border-transparent focus:bg-white focus:border-[#ff4757] focus:ring-4 focus:ring-red-50 rounded-2xl text-gray-700 font-medium transition-all outline-none border-2"
+                class="w-full pl-12 pr-12 py-4 bg-gray-50 border-transparent focus:bg-white focus:border-[#ff4757] focus:ring-4 focus:ring-red-50 rounded-2xl text-gray-700 font-medium transition-all outline-none border-2"
               />
+              <button
+                type="button"
+                @click="showConfirmPassword = !showConfirmPassword"
+                class="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <component :is="showConfirmPassword ? EyeOff : Eye" class="w-5 h-5" />
+              </button>
             </div>
           </div>
 

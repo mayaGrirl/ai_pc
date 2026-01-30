@@ -195,7 +195,7 @@ onMounted(() => {
 <template>
   <MainLayout>
     <div class="min-h-[calc(100vh-120px)] px-5 py-10">
-      <div class="max-w-[1400px] mx-auto grid grid-cols-[1fr_500px] gap-[30px] items-start max-[1200px]:grid-cols-1 max-[1200px]:max-w-[600px]">
+      <div class="max-w-[1400px] mx-auto grid grid-cols-[1fr_1fr] gap-[30px] items-start max-[1200px]:grid-cols-1 max-[1200px]:max-w-[600px]">
         <!-- 左侧：账户信息区域 -->
         <div class="flex flex-col gap-6">
           <!-- 顶部导航按钮 -->

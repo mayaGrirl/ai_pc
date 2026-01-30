@@ -19,15 +19,27 @@ import {ErrorMessage, useField, useForm} from "vee-validate";
 import SodiumEncryptor from "@/utils/sodium.ts";
 import {httpConfigRKey} from "@/api/common.ts";
 import ReceiveSmsInput from "@/components/receive-sms.vue";
-import {useRouter} from "vue-router";
+import {useRoute, useRouter} from "vue-router";
 
 const router = useRouter()
+const route = useRoute()
 const toast = useToast();
 const authStore = useAuthStore()
 const customer = computed(() => authStore.currentCustomer)
 
 type TabKey = 'LOGIN_PWD' | 'PAY_PWD' | 'SECURITY_QUEST' | 'GIFT_VERIFY' | 'CARD_VERIFY';
-const activeTab = ref<TabKey>('LOGIN_PWD');
+
+// 从URL获取初始tab
+const getInitialTab = (): TabKey => {
+  const tab = route.query.tab as string;
+  const validTabs: TabKey[] = ['LOGIN_PWD', 'PAY_PWD', 'SECURITY_QUEST', 'GIFT_VERIFY', 'CARD_VERIFY'];
+  if (tab && validTabs.includes(tab as TabKey)) {
+    return tab as TabKey;
+  }
+  return 'LOGIN_PWD';
+};
+
+const activeTab = ref<TabKey>(getInitialTab());
 
 // 表单提交loading
 const formLoading = ref<boolean>(false);
@@ -200,6 +212,10 @@ const submitExchange = handleSubmit(async (values) => {
 
 // 监听tab变化
 watch(activeTab, (tab) => {
+  // 更新URL
+  router.replace({
+    query: { ...route.query, tab }
+  });
   if (tab === 'LOGIN_PWD' || tab === 'PAY_PWD') {
     resetForm();
   }

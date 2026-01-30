@@ -222,7 +222,7 @@ const handleLogin = async () => {
             :class="compact ? 'py-1' : 'py-4'"
             class="w-full pl-12 pr-12 bg-gray-50 border-transparent focus:bg-white focus:border-[#ff4757] focus:ring-4 focus:ring-red-50 rounded-2xl text-gray-700 font-medium transition-all outline-none border-2"
           />
-          <button 
+          <button
             type="button"
             @click="showPassword = !showPassword"
             class="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
@@ -265,10 +265,13 @@ const handleLogin = async () => {
         <label class="flex items-center gap-2 cursor-pointer group">
           <input type="checkbox" v-model="form.rememberMe" class="hidden" />
           <div
-            class="w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all"
-            :class="form.rememberMe ? 'bg-[#ff4757] border-[#ff4757]' : 'border-gray-200 group-hover:border-gray-300'"
+            class="rounded-md border-2 flex items-center justify-center transition-all"
+            :class="[
+              form.rememberMe ? 'bg-[#ff4757] border-[#ff4757]' : 'border-gray-200 group-hover:border-gray-300',
+              compact ? 'w-4 h-4' : 'w-5 h-5'
+            ]"
           >
-            <div v-show="form.rememberMe" class="w-2.5 h-2.5 bg-white rounded-[1px]"></div>
+            <div v-show="form.rememberMe" class="bg-white rounded-[1px]" :class="compact ? 'w-2 h-2' : 'w-2.5 h-2.5'"></div>
           </div>
           <span class="text-sm text-gray-500 font-medium">记住登录状态</span>
         </label>

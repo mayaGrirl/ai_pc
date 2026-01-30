@@ -8,7 +8,6 @@ import type { CustomerProfile, VipReceiveState, SalaryWekdayTotal, SignInStatist
 
 const router = useRouter()
 const authStore = useAuthStore()
-const customer = computed(() => authStore.currentCustomer)
 const isLogin = computed(() => authStore.isLogin)
 
 // API数据
@@ -67,9 +66,9 @@ const beginnerTasks = computed(() => {
     {
       name: '密码保护',
       desc: '用于验证你的身份，保护账户安全',
-      completed: !!customerData?.securitypass,
-      action: customerData?.securitypass ? '已设置' : '马上设置',
-      path: '/user/security'
+      completed: true,
+      action: '已设置',
+      path: '/user/security?tab=LOGIN_PWD'
     },
     {
       name: '完善支付宝账号',
@@ -88,9 +87,9 @@ const beginnerTasks = computed(() => {
     {
       name: '二级密码',
       desc: '设置二级密码，为了保障您的资金安全，建议定期修改二级密码！',
-      completed: false,
-      action: '设置',
-      path: '/user/security'
+      completed: !!customerData?.securitypass,
+      action: customerData?.securitypass ? '已设置' : '马上设置',
+      path: '/user/security?tab=PAY_PWD'
     }
   ]
 })

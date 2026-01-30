@@ -12,6 +12,7 @@ import { rankToday, rankYesterday } from '@/api/rank'
 import type { IndexDataItem, gameItem } from '@/types/index.type'
 import {TodayField} from '@/types/rank.type'
 import LoginBox from "@/components/auth/LoginBox.vue";
+import { LogOut, Wallet, ShoppingBag, CircleDollarSign, CalendarCheck, MessageSquare, ArrowRight } from 'lucide-vue-next'
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -365,7 +366,7 @@ onMounted(async () => {
   })
 
   // 获取排行榜数据
-  fetchRankings()
+  await fetchRankings();
 
   try {
     const [bannerRes, announcementRes, hotRes] = await Promise.all([
@@ -428,18 +429,6 @@ const getGameImage = (game: gameItem, index: number) => {
   return `/index/0${defaultIndex}.png`
 }
 
-const formatNumber = (num: number) => {
-  return num.toLocaleString()
-}
-
-const handleLogout = () => {
-  authStore.logout()
-}
-
-const scrollToTop = () => {
-  window.scrollTo({ top: 0, behavior: 'smooth' })
-}
-
 // Close popup
 const closePopup = () => {
   showPopup.value = false
@@ -482,32 +471,94 @@ const closePopup = () => {
         </div>
       </template>
       <template v-else>
-        <div class="fucen_box">
-          <!-- Logged in: Show user info -->
-          <div class="message_box">
-            <div class="img">
-              <router-link to="/user">
-                <img :src="customer?.avatar || '/head/m-1.gif'" :alt="customer?.nickname || ''">
+        <div class="bg-white absolute right-[calc(50%-570px)] z-[102] w-[320px] h-auto p-3 top-[15px] box-border rounded-[24px] shadow-[0_10px_25px_-5px_rgba(0,0,0,0.1),0_8px_10px_-6px_rgba(0,0,0,0.1)] animate-in fade-in zoom-in duration-500">
+          <!-- Header: Avatar & Info -->
+          <div class="flex items-center gap-4 mb-2 relative">
+            <div class="relative group">
+              <div class="w-12 h-12 rounded-2xl overflow-hidden ring-4 ring-orange-50 transition-all group-hover:ring-orange-100 shadow-sm">
+                <img :src="customer?.avatar_url || '/head/m-1.gif'" :alt="customer?.nickname || ''" class="w-full h-full object-cover">
+              </div>
+              <div class="absolute -bottom-1 -right-1 p-1  rounded-lg shadow-sm">
+                <img
+                  :src="`/ranking/vip/${customer?.level || 1}.png`"
+                  alt="level-customer"
+                  class="w-3 h-3"
+                  @error="($event.target as HTMLImageElement).style.display = 'none'"
+                />
+              </div>
+            </div>
+
+            <div class="flex-1 min-w-0">
+              <h3 class="text-base font-black text-gray-900 truncate leading-tight mb-0.5">
+                {{ customer?.nickname || '_sg' + customer?.id }}
+              </h3>
+              <div class="flex items-center gap-2">
+                <span class="text-[11px] font-bold text-gray-400 uppercase tracking-wider">ID: {{ customer?.id }}</span>
+                <span class="px-2 py-0.5 bg-gray-100 text-[10px] font-bold text-gray-500 rounded-md">{{customer?.gid_label}}</span>
+              </div>
+            </div>
+
+            <button
+              @click="authStore.logout()"
+              class="absolute -top-2 -right-2 p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+              title="退出登录"
+            >
+              <LogOut class="w-5 h-5" />
+            </button>
+          </div>
+
+          <!-- Stats/Balance -->
+          <div class="bg-gray-50 rounded-2xl p-1 mb-2 border border-gray-100/50">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Wallet class="w-3.5 h-3.5" /> 总余额
+              </span>
+              <router-link to="/user/detail" class="text-[10px] font-bold text-gray-400 hover:text-gray-600">
+                <div class="flex items-baseline gap-1">
+                  <span class="text-2xl font-black text-[#ff4757] tracking-tight">{{ $n(customer?.points || 0) }}</span>
+                  <img alt="coin" class="inline-block w-[13px] h-[13px]" src="/ranking/coin.png"/>
+                </div>
               </router-link>
             </div>
-            <div class="text">
-              <router-link to="/user">
-                <h3>{{ customer?.nickname || '_sg' + customer?.id }} <span style="font-size: 12px; font-weight: initial;">ID:{{ customer?.id }}</span></h3>
-              </router-link>
-              <p>暂未开通会员 <a href="#" class="button" style="cursor: pointer; margin-left: 10px;">开通会员</a></p>
+          </div>
+
+          <!-- Quick Actions Grid -->
+          <div class="grid grid-cols-2 gap-3 mb-2">
+            <router-link to="/partners" class="flex items-center justify-center gap-2 py-2 bg-gradient-to-br from-[#ff4757] to-[#ee5a6f] text-white rounded-2xl shadow-lg shadow-red-100 hover:shadow-red-200 hover:-translate-y-0.5 transition-all">
+              <CircleDollarSign class="w-4 h-4" />
+              <span class="font-black text-sm">立即充值</span>
+            </router-link>
+            <router-link to="/shop" class="flex items-center justify-center gap-2 py-2 bg-white border-2 border-gray-100 text-gray-700 rounded-2xl hover:border-orange-100 hover:bg-orange-50/30 transition-all">
+              <ShoppingBag class="w-4 h-4 text-orange-400" />
+              <span class="font-bold text-sm">积分商城</span>
+            </router-link>
+          </div>
+
+          <!-- Bottom Action -->
+          <router-link
+            to="/user/checkin"
+            class="w-full flex items-center justify-between p-2 bg-gray-50 rounded-2xl group hover:bg-gray-100 transition-all"
+          >
+            <div class="flex items-center gap-3">
+              <div class="p-2 bg-white rounded-xl shadow-sm text-green-500">
+                <CalendarCheck class="w-5 h-5" />
+              </div>
+              <span class="font-bold text-gray-700 text-sm">每日签到领奖励</span>
             </div>
-            <div class="close_box" @click="handleLogout"><a href="javascript:void(0)"></a></div>
-          </div>
-          <div class="user-onwer-list">
-            <router-link to="/user/detail"><p>余额：<span>{{ formatNumber(customer?.points || 0) }}</span></p></router-link>
-            <router-link class="button" to="/shop">商城</router-link>
-            <router-link class="button" to="/partners">充值</router-link>
-          </div>
-          <div class="anniu_box">
-            <router-link class="button" to="/user/checkin" style="cursor: pointer">每日签到</router-link>
-          </div>
-          <a :href="`http://wpa.qq.com/msgrd?v=3&uin=${sysConfig?.connet_qq || '228711'}&site=qq&menu=yes`" target="_blank" class="qq-banner">
-            <img src="/index_qq.png" alt="QQ客服" width="335" height="75">
+            <ArrowRight class="w-4 h-4 text-gray-300 group-hover:translate-x-1 transition-transform" />
+          </router-link>
+
+          <!-- Support Banner -->
+          <a
+            :href="`http://wpa.qq.com/msgrd?v=3&uin=${sysConfig?.connet_qq || '228711'}&site=qq&menu=yes`"
+            target="_blank"
+            class="mt-2 block relative overflow-hidden rounded-2xl group border border-gray-100 shadow-sm"
+          >
+            <img src="/index_qq.png" alt="QQ客服" class="w-full h-auto transition-transform duration-500 group-hover:scale-105">
+            <div class="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors"></div>
+            <div class="absolute bottom-2 right-2 flex items-center gap-1.5 px-2 py-1 bg-white/90 backdrop-blur-sm rounded-lg text-[10px] font-bold text-[#12b7f5]">
+              <MessageSquare class="w-3 h-3" /> 点击咨询
+            </div>
           </a>
         </div>
       </template>
@@ -518,7 +569,7 @@ const closePopup = () => {
       <div class="center_box">
         <!-- Step Bar -->
         <div class="step_box">
-          <span><b>{{ formatNumber(gameCount) }}</b></span>
+          <span><b>{{ $n(gameCount) }}</b></span>
         </div>
 
         <!-- Latest Games -->
@@ -591,12 +642,12 @@ const closePopup = () => {
                 <!-- 原始数据 -->
                 <li v-for="(record, index) in withdrawRecords" :key="`a-${index}`">
                   <p><b><a href="javascript:void(0)">{{ record.user }}</a></b> 提现了</p>
-                  <span>{{ formatNumber(record.amount) }}</span>
+                  <span>{{ $n(record.amount) }}</span>
                 </li>
                 <!-- 复制一份用于无缝滚动 -->
                 <li v-for="(record, index) in withdrawRecords" :key="`b-${index}`">
                   <p><b><a href="javascript:void(0)">{{ record.user }}</a></b> 提现了</p>
-                  <span>{{ formatNumber(record.amount) }}</span>
+                  <span>{{ $n(record.amount) }}</span>
                 </li>
               </ul>
             </div>
@@ -663,7 +714,7 @@ const closePopup = () => {
                 >{{ item.rank > 3 ? item.rank : '' }}</span>
               </div>
               <div class="col-name"><a href="javascript:void(0)">{{ item.user }}</a></div>
-              <div class="col-score">{{ formatNumber(item.amount) }}</div>
+              <div class="col-score">{{ $n(item.amount) }}</div>
             </li>
           </ul>
           <!-- Pagination -->
@@ -688,7 +739,6 @@ const closePopup = () => {
         <div class="index_box prize_box">
           <div class="top">
             <h2>游戏商城</h2>
-            <a class="more" href="javascript:void(0)" @click="scrollToTop">更多<img src="/index_more.png"></a>
           </div>
           <div class="award_box">
             <div class="hd">
@@ -744,7 +794,6 @@ const closePopup = () => {
         <div class="index_box work_box">
           <div class="top">
             <h2>合作商家</h2>
-            <a class="more" href="javascript:void(0)" @click="scrollToTop">更多<img src="/index_more.png"></a>
           </div>
           <div class="work_list">
             <img src="/index_work.jpg" alt="合作商家">
@@ -1914,54 +1963,6 @@ a:hover {
   text-decoration: none;
 }
 
-/* Popup Announcement Dialog */
-.dialog {
-  will-change: visibility, opacity;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  z-index: 1000;
-  visibility: hidden;
-  opacity: 0;
-  background: rgba(0, 0, 0, 0.5);
-  transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
-}
-
-.dialog--active {
-  visibility: visible;
-  opacity: 1;
-}
-
-.dialog__dialog {
-  max-width: 600px;
-  width: 90%;
-  padding: 1.2rem;
-}
-
-.dialog__content {
-  will-change: transform, opacity;
-  position: relative;
-  padding: 2.4rem;
-  background: #fff;
-  background-clip: padding-box;
-  box-shadow: 0 12px 15px 0 rgba(0, 0, 0, 0.25);
-  opacity: 0;
-  transform: scale(0.9);
-  transition: all 0.25s cubic-bezier(0.23, 1, 0.32, 1);
-}
-
-.dialog__content--active {
-  opacity: 1;
-  transform: scale(1);
-}
-
 .dialog__content h1 {
   margin: 0 0 20px 0;
   font-size: 20px;
@@ -1970,14 +1971,6 @@ a:hover {
   padding-right: 40px;
   border-bottom: 1px solid #eee;
   padding-bottom: 15px;
-}
-
-.dialog__body {
-  font-size: 14px;
-  line-height: 1.8;
-  color: #666;
-  max-height: 400px;
-  overflow-y: auto;
 }
 
 .dialog__body :deep(p) {
@@ -1993,32 +1986,12 @@ a:hover {
   color: #f03736;
 }
 
-.dialog-close {
-  z-index: 1100;
-  cursor: pointer;
-  position: absolute;
-  top: 0;
-  right: 0;
-  margin: 1.2rem;
-  padding: 0.6rem;
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 50%;
-  transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
 .dialog-close svg {
   width: 20px;
   height: 20px;
   fill: #fff;
   pointer-events: none;
   vertical-align: top;
-}
-
-.dialog-close:hover {
-  background: rgba(0, 0, 0, 0.6);
 }
 </style>
 

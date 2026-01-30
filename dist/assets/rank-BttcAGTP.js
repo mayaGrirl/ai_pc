@@ -1,1 +1,0 @@
-import{h as a}from"./MainLayout-Cy8swJD0.js";const t=()=>a.get("/api/app/v1/rank/today",{}),e=()=>a.get("/api/app/v1/rank/yesterday",{}),n=()=>a.get("/api/app/v1/rank/week",{});export{e as a,n as b,t as r};

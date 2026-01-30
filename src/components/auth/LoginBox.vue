@@ -264,7 +264,7 @@ const handleLogin = async () => {
           </div>
           <span class="text-sm text-gray-500 font-medium">记住登录状态</span>
         </label>
-        <router-link to="/forgot-password" class="text-sm text-gray-400 hover:text-[#ff4757] transition-colors font-medium">
+        <router-link to="/forgot-password" v-if="loginType === 'password'" class="text-sm text-gray-400 hover:text-[#ff4757] transition-colors font-medium">
           忘记密码?
         </router-link>
       </div>
@@ -281,7 +281,7 @@ const handleLogin = async () => {
 
       <!-- Register Link -->
       <div
-        class="text-center"
+        class="text-center z-[101]"
         :class="compact ? 'pt-1' : 'pt-6 pb-2'"
       >
         <span class="text-gray-400 text-sm font-medium">还没有账号?</span>

@@ -1,23 +1,23 @@
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { useI18n } from 'vue-i18n'
-import { useAuthStore } from '@/stores/auth'
 import { registration, sendSmsToMobile } from '@/api/auth'
 import { httpConfigRKey } from '@/api/common'
 import SodiumEncryptor from '@/utils/sodium'
 import MainLayout from '@/components/layout/MainLayout.vue'
+import { useAuthStore } from '@/stores/auth'
+import { useToast } from '@/composables/useToast'
+import { Smartphone, ShieldCheck, Lock, UserPlus, ArrowLeft, ArrowRight, MessageSquare, CheckCircle2 } from 'lucide-vue-next'
 
-const { t } = useI18n()
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const toast = useToast()
 
 const loading = ref(false)
-const sendingCode = ref(false)
 const countdown = ref(0)
-const errorMsg = ref('')
 const publicKey = ref('')
+let timer: any = null
 
 // 推荐人key (从URL读取)
 const recommend = computed(() => (route.query.t as string) || '')
@@ -41,6 +41,20 @@ onMounted(async () => {
   }
 })
 
+onUnmounted(() => {
+  if (timer) clearInterval(timer)
+})
+
+const startCountdown = () => {
+  countdown.value = 60
+  timer = setInterval(() => {
+    countdown.value--
+    if (countdown.value <= 0) {
+      clearInterval(timer)
+    }
+  }, 1000)
+}
+
 // 密码强度计算
 const passwordStrength = computed(() => {
   const pwd = form.password
@@ -50,64 +64,57 @@ const passwordStrength = computed(() => {
   if (pwd.length >= 8) strength++
   if (/[A-Z]/.test(pwd)) strength++
   if (/[0-9]/.test(pwd)) strength++
-  if (/[^A-Za-z0-9]/.test(pwd)) strength++
   return Math.min(strength, 4)
 })
 
 const strengthText = computed(() => {
-  const texts = ['', '弱', '中', '强', '很强']
+  const texts = ['太简单', '弱', '中', '强', '极强']
   return texts[passwordStrength.value]
 })
 
+const strengthColor = computed(() => {
+  const colors = ['bg-gray-100', 'bg-red-400', 'bg-orange-400', 'bg-yellow-400', 'bg-green-500']
+  return colors[passwordStrength.value]
+})
+
 const handleSendCode = async () => {
-  if (!form.mobile || form.mobile.length !== 11) {
-    errorMsg.value = t('login.mobileError')
+  if (!form.mobile || !/^1[3-9]\d{9}$/.test(form.mobile)) {
+    toast.error('请输入正确的11位手机号')
     return
   }
 
-  sendingCode.value = true
   try {
     const res = await sendSmsToMobile(form.mobile)
     if (res.code === 200) {
-      countdown.value = 60
-      const timer = setInterval(() => {
-        countdown.value--
-        if (countdown.value <= 0) {
-          clearInterval(timer)
-        }
-      }, 1000)
+      toast.success('验证码已发送')
+      startCountdown()
     } else {
-      errorMsg.value = res.message || 'Failed to send code'
+      toast.error(res.message || '获取验证码失败')
     }
-  } catch (error) {
-    console.error('Send code error:', error)
-  } finally {
-    sendingCode.value = false
+  } catch (error: any) {
+    toast.error(error.message || '获取验证码失败')
   }
 }
 
 const handleRegister = async () => {
-  errorMsg.value = ''
-
   if (!form.mobile || form.mobile.length !== 11) {
-    errorMsg.value = t('login.mobileError')
+    toast.error('请输入正确的手机号')
     return
   }
   if (!form.verify_code) {
-    errorMsg.value = t('register.verifyCode')
+    toast.error('请输入短信验证码')
     return
   }
   if (!form.password || form.password.length < 6) {
-    errorMsg.value = t('login.passwordError')
+    toast.error('密码长度至少为6位')
     return
   }
   if (form.password !== form.confirm_password) {
-    errorMsg.value = t('register.confirmPassword')
+    toast.error('两次输入的密码不一致')
     return
   }
 
   loading.value = true
-
   try {
     // 加密密码
     let encryptedPassword = form.password
@@ -127,18 +134,18 @@ const handleRegister = async () => {
 
     if (res.code === 200 && res.data) {
       authStore.setToken(
-        res.data.access_token,
-        res.data.token_type,
-        res.data.expires_at
+        res.data.access_token!,
+        res.data.token_type!,
+        res.data.expires_at!
       )
       await authStore.fetchCurrentCustomer()
-      router.push('/')
+      toast.success('注册成功')
+      await router.push('/')
     } else {
-      errorMsg.value = res.message || t('register.registerFailed')
+      toast.error(res.message || '注册失败')
     }
-  } catch (error) {
-    console.error('Register error:', error)
-    errorMsg.value = t('register.registerFailed')
+  } catch (error: any) {
+    toast.error(error.message || '注册过程中发生错误')
   } finally {
     loading.value = false
   }
@@ -147,308 +154,141 @@ const handleRegister = async () => {
 
 <template>
   <MainLayout>
-    <div class="register-page">
-      <div class="register-container">
-        <!-- 页面标题 -->
-        <h1 class="page-title">
-          <span class="highlight">免费注册</span>鼎丰28-幸运28领头羊,打造28行业信誉平台.
-        </h1>
+    <div class="min-h-[calc(100vh-160px)] bg-gray-50/50 flex items-center justify-center p-6 relative overflow-hidden">
+      <div class="w-full max-w-[520px] bg-white rounded-[40px] shadow-2xl shadow-gray-200/50 border border-white/50 p-5 relative z-10 animate-in fade-in zoom-in duration-500">
+        <!-- Back Button -->
+        <button
+          @click="router.push('/login')"
+          class="absolute top-8 left-8 p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-full transition-all group"
+        >
+          <ArrowLeft class="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
+        </button>
 
-        <!-- 注册表单 -->
-        <div class="register-form">
-          <!-- 错误提示 -->
-          <div v-if="errorMsg" class="error-message">
-            {{ errorMsg }}
+        <!-- Header -->
+        <div class="text-center mb-4">
+          <div class="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-red-50 to-orange-50 rounded-[32px] mb-3 shadow-sm">
+            <UserPlus class="w-10 h-10 text-[#ff4757]" />
           </div>
+          <h1 class="text-3xl font-black text-gray-900 tracking-tight mb-3">创建新账号</h1>
+          <p class="text-gray-500 font-medium">加入 鼎丰28，享受安全可信赖的游戏体验</p>
+        </div>
 
-          <!-- 手机号 -->
-          <div class="form-row">
-            <label class="form-label">手机号码</label>
-            <div class="form-control">
+        <div class="space-y-5">
+          <!-- Mobile Input -->
+          <div class="space-y-2">
+            <label class="text-[12px] font-bold text-gray-400 uppercase tracking-wider ml-1">手机号码</label>
+            <div class="relative group">
+              <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Smartphone class="w-5 h-5 text-gray-300 group-focus-within:text-[#ff4757] transition-colors" />
+              </div>
               <input
                 v-model="form.mobile"
                 type="text"
-                :placeholder="t('login.inputMobile')"
                 maxlength="11"
+                placeholder="请输入您的11位手机号"
+                class="w-full pl-12 pr-4 py-4 bg-gray-50 border-transparent focus:bg-white focus:border-[#ff4757] focus:ring-4 focus:ring-red-50 rounded-2xl text-gray-700 font-medium transition-all outline-none border-2"
               />
             </div>
           </div>
 
-          <!-- 验证码 -->
-          <div class="form-row">
-            <label class="form-label"></label>
-            <div class="form-control with-btn">
-              <input
-                v-model="form.verify_code"
-                type="text"
-                placeholder="验证码"
-                maxlength="6"
-              />
+          <!-- Code Input -->
+          <div class="space-y-2">
+            <label class="text-[12px] font-bold text-gray-400 uppercase tracking-wider ml-1">短信验证码</label>
+            <div class="flex gap-3">
+              <div class="relative flex-1 group">
+                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <ShieldCheck class="w-5 h-5 text-gray-300 group-focus-within:text-[#ff4757] transition-colors" />
+                </div>
+                <input
+                  v-model="form.verify_code"
+                  type="text"
+                  maxlength="6"
+                  placeholder="6位验证码"
+                  class="w-full pl-12 pr-4 py-4 bg-gray-50 border-transparent focus:bg-white focus:border-[#ff4757] focus:ring-4 focus:ring-red-50 rounded-2xl text-gray-700 font-medium transition-all outline-none border-2"
+                />
+              </div>
               <button
-                type="button"
-                class="btn-code"
-                :disabled="countdown > 0 || sendingCode"
                 @click="handleSendCode"
+                :disabled="countdown > 0"
+                class="px-6 py-4 bg-gray-100 text-gray-600 font-bold rounded-2xl hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap min-w-[120px]"
               >
                 {{ countdown > 0 ? `${countdown}s` : '获取验证码' }}
               </button>
             </div>
           </div>
 
-          <!-- 登录密码 -->
-          <div class="form-row">
-            <label class="form-label">登录密码</label>
-            <div class="form-control">
+          <!-- Password Input -->
+          <div class="space-y-2">
+            <label class="text-[12px] font-bold text-gray-400 uppercase tracking-wider ml-1">设置登录密码</label>
+            <div class="relative group">
+              <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Lock class="w-5 h-5 text-gray-300 group-focus-within:text-[#ff4757] transition-colors" />
+              </div>
               <input
                 v-model="form.password"
                 type="password"
-                :placeholder="t('login.inputPassword')"
+                placeholder="密码不少于6位"
+                class="w-full pl-12 pr-4 py-4 bg-gray-50 border-transparent focus:bg-white focus:border-[#ff4757] focus:ring-4 focus:ring-red-50 rounded-2xl text-gray-700 font-medium transition-all outline-none border-2"
               />
             </div>
-          </div>
 
-          <!-- 密码强度 -->
-          <div class="form-row" v-if="form.password">
-            <label class="form-label"></label>
-            <div class="form-control">
-              <div class="password-strength">
-                <span class="strength-label">密码强度</span>
-                <div class="strength-bars">
-                  <span :class="['bar', { active: passwordStrength >= 1 }]"></span>
-                  <span :class="['bar', { active: passwordStrength >= 2 }]"></span>
-                  <span :class="['bar', { active: passwordStrength >= 3 }]"></span>
-                  <span :class="['bar', { active: passwordStrength >= 4 }]"></span>
-                </div>
-                <span class="strength-text">{{ strengthText }}</span>
+            <!-- Password Strength -->
+            <div v-if="form.password" class="px-1 pt-1 flex items-center justify-between">
+              <div class="flex gap-1 flex-1 max-w-[160px]">
+                <div
+                  v-for="i in 4"
+                  :key="i"
+                  class="h-1.5 flex-1 rounded-full transition-all duration-500"
+                  :class="i <= passwordStrength ? strengthColor : 'bg-gray-100'"
+                ></div>
               </div>
+              <span class="text-[11px] font-bold" :class="passwordStrength > 0 ? 'text-gray-500' : 'text-gray-300'">
+                强度: {{ strengthText }}
+              </span>
             </div>
           </div>
 
-          <!-- 确认密码 -->
-          <div class="form-row">
-            <label class="form-label">确认密码</label>
-            <div class="form-control">
+          <!-- Confirm Password -->
+          <div class="space-y-2">
+            <label class="text-[12px] font-bold text-gray-400 uppercase tracking-wider ml-1">确认新密码</label>
+            <div class="relative group">
+              <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Lock class="w-5 h-5 text-gray-300 group-focus-within:text-[#ff4757] transition-colors" />
+              </div>
               <input
                 v-model="form.confirm_password"
                 type="password"
-                :placeholder="t('register.confirmPassword')"
+                placeholder="请再次填写您的密码"
+                class="w-full pl-12 pr-4 py-4 bg-gray-50 border-transparent focus:bg-white focus:border-[#ff4757] focus:ring-4 focus:ring-red-50 rounded-2xl text-gray-700 font-medium transition-all outline-none border-2"
               />
             </div>
           </div>
 
-          <!-- 注册按钮 -->
-          <div class="form-row">
-            <label class="form-label"></label>
-            <div class="form-control">
-              <button type="button" class="btn-submit" :disabled="loading" @click="handleRegister">
-                <span v-if="loading" class="loading-spinner"></span>
-                <span v-else>注册</span>
-              </button>
-            </div>
+          <!-- Submit -->
+          <button
+            @click="handleRegister"
+            :disabled="loading"
+            class="w-full py-3 mt-4 bg-gradient-to-r from-[#ff4757] to-[#ee5a6f] text-white font-black rounded-3xl shadow-xl shadow-red-100 hover:shadow-red-200 hover:-translate-y-1 active:translate-y-0 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:hover:translate-y-0"
+          >
+            <span v-if="loading" class="w-6 h-6 border-3 border-white/30 border-t-white rounded-full animate-spin"></span>
+            <span v-else class="flex items-center gap-2 text-lg">立即创建账户 <ArrowRight class="w-5 h-5" /></span>
+          </button>
+
+          <!-- Login Link -->
+          <div class="text-center">
+            <span class="text-gray-400 font-medium">已有账户?</span>
+            <router-link to="/login" class="ml-2 text-[#ff4757] font-black hover:underline underline-offset-4">
+              直接登录
+            </router-link>
           </div>
+        </div>
+
+        <!-- Footer Help -->
+        <div class="mt-5 border-t border-gray-50 flex items-center justify-center gap-2 text-sm text-gray-400 italic">
+          <MessageSquare class="w-4 h-4" />
+          <span>遇到问题? 请联系您的代理提供支持</span>
         </div>
       </div>
     </div>
   </MainLayout>
 </template>
-
-<style scoped>
-.register-page {
-  min-height: 500px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 20px;
-}
-
-.register-container {
-  width: 100%;
-  max-width: 700px;
-  background: #fff;
-  border-radius: 4px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  padding: 40px 50px;
-}
-
-.page-title {
-  text-align: center;
-  font-size: 20px;
-  font-weight: normal;
-  color: #333;
-  margin-bottom: 40px;
-}
-
-.page-title .highlight {
-  color: #ff6600;
-}
-
-.register-form {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.error-message {
-  background: #fff2f0;
-  border: 1px solid #ffccc7;
-  color: #ff4d4f;
-  padding: 10px 15px;
-  border-radius: 4px;
-  font-size: 13px;
-  text-align: center;
-}
-
-.form-row {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-}
-
-.form-label {
-  width: 80px;
-  text-align: right;
-  font-size: 14px;
-  color: #333;
-  flex-shrink: 0;
-}
-
-.form-control {
-  flex: 1;
-  max-width: 350px;
-}
-
-.form-control input {
-  width: 100%;
-  padding: 10px 15px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.3s;
-}
-
-.form-control input:focus {
-  border-color: #ff6600;
-}
-
-.form-control input::placeholder {
-  color: #bbb;
-}
-
-.form-control.with-btn {
-  display: flex;
-  gap: 10px;
-}
-
-.form-control.with-btn input {
-  flex: 1;
-}
-
-.btn-code {
-  padding: 10px 15px;
-  background: #fff;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  color: #333;
-  font-size: 13px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.3s;
-}
-
-.btn-code:hover:not(:disabled) {
-  border-color: #ff6600;
-  color: #ff6600;
-}
-
-.btn-code:disabled {
-  color: #999;
-  cursor: not-allowed;
-}
-
-/* 密码强度 */
-.password-strength {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.strength-label {
-  font-size: 12px;
-  color: #999;
-}
-
-.strength-bars {
-  display: flex;
-  gap: 4px;
-}
-
-.strength-bars .bar {
-  width: 40px;
-  height: 6px;
-  background: #eee;
-  border-radius: 3px;
-  transition: background 0.3s;
-}
-
-.strength-bars .bar.active:nth-child(1) {
-  background: #ff4d4f;
-}
-
-.strength-bars .bar.active:nth-child(2) {
-  background: #faad14;
-}
-
-.strength-bars .bar.active:nth-child(3) {
-  background: #52c41a;
-}
-
-.strength-bars .bar.active:nth-child(4) {
-  background: #1890ff;
-}
-
-.strength-text {
-  font-size: 12px;
-  color: #666;
-}
-
-.btn-submit {
-  width: 100%;
-  padding: 12px;
-  background: linear-gradient(135deg, #ff6600, #ff8533);
-  border: none;
-  border-radius: 4px;
-  color: #fff;
-  font-size: 16px;
-  cursor: pointer;
-  transition: opacity 0.3s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-
-.btn-submit:hover {
-  opacity: 0.9;
-}
-
-.btn-submit:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.loading-spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

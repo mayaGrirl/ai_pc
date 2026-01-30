@@ -9,10 +9,9 @@ import Skeleton from '@/components/Skeleton.vue'
 import { getBanners, getAnnouncements, indexGameHotNew, getHomePopup } from '@/api/home'
 import { withdrawalDynamics } from '@/api/customer'
 import { rankToday, rankYesterday } from '@/api/rank'
-import { httpConfigRKey } from '@/api/common'
-import SodiumEncryptor from '@/utils/sodium'
 import type { IndexDataItem, gameItem } from '@/types/index.type'
 import {TodayField} from '@/types/rank.type'
+import LoginBox from "@/components/auth/LoginBox.vue";
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -31,16 +30,6 @@ const newGames = ref<gameItem[]>([])
 const currentBanner = ref(0)
 const loading = ref(true)
 const gameCount = ref(611561927)
-
-// Login form
-const loginForm = ref({
-  mobile: '',
-  password: '',
-  rememberMe: false
-})
-const loginLoading = ref(false)
-const loginError = ref('')
-const publicKey = ref('')
 
 // Popup announcement
 const showPopup = ref(false)
@@ -350,64 +339,8 @@ const prevBanner = () => {
   }
 }
 
-// Login handler
-const handleLogin = async () => {
-  loginError.value = ''
-  if (!loginForm.value.mobile) {
-    loginError.value = t('login.inputMobile')
-    return
-  }
-  if (!loginForm.value.password) {
-    loginError.value = t('login.inputPassword')
-    return
-  }
-
-  // 检查公钥是否已获取
-  if (!publicKey.value) {
-    loginError.value = '系统初始化中，请稍后重试'
-    return
-  }
-
-  loginLoading.value = true
-  try {
-    // 加密密码
-    const encryptedPassword = await SodiumEncryptor.encrypt(loginForm.value.password, publicKey.value)
-
-    const { login } = await import('@/api/auth')
-    const res = await login({
-      mobile: loginForm.value.mobile,
-      password: encryptedPassword,
-      type: 1
-    })
-
-    if (res.code === 200 && res.data) {
-      authStore.setToken(
-        res.data.access_token,
-        res.data.token_type,
-        res.data.expires_at
-      )
-      await authStore.fetchCurrentCustomer()
-    } else {
-      loginError.value = res.message || t('login.loginFailed')
-    }
-  } catch {
-    loginError.value = t('login.loginFailed')
-  } finally {
-    loginLoading.value = false
-  }
-}
-
 // Load data
 onMounted(async () => {
-  // 获取公钥
-  httpConfigRKey().then(({ data, code }) => {
-    if (code === 200 && data) {
-      publicKey.value = data.key
-    }
-  }).catch(error => {
-    console.error('Failed to get public key:', error)
-  })
-
   // 获取系统配置（通过store统一管理，避免重复请求）
   configStore.fetchConfig()
 
@@ -542,35 +475,15 @@ const closePopup = () => {
       <a v-if="banners.length > 1" class="next" href="javascript:void(0)" @click="nextBanner"></a>
 
       <!-- Login Box / User Info -->
-      <div class="fucen_box">
-        <!-- Not logged in: Show login form -->
-        <template v-if="!isLogin">
-          <div><b>用户登入</b></div>
-          <form class="sign_box" @submit.prevent="handleLogin">
-            <div style="margin-top: 15px">
-              <div v-if="loginError" class="error-msg">{{ loginError }}</div>
-              <div class="frame">
-                <b class="zh"></b>
-                <input v-model="loginForm.mobile" type="text" placeholder="请输入手机号码" tabindex="1">
-              </div>
-            </div>
-            <div>
-              <div class="frame">
-                <b class="mm"></b>
-                <input v-model="loginForm.password" type="password" placeholder="请输入密码" tabindex="2">
-              </div>
-            </div>
-            <div>
-              <input type="submit" class="sign" :value="loginLoading ? '登录中...' : '登录'" :disabled="loginLoading">
-            </div>
-          </form>
-          <div style="margin:10px auto;text-align: center">
-            <p><router-link to="/forgot-password">忘记密码</router-link> | <router-link to="/register">立即注册</router-link></p>
-          </div>
-        </template>
-
-        <!-- Logged in: Show user info -->
-        <template v-else>
+      <!-- Not logged in: Show login form -->
+      <template v-if="!isLogin">
+        <div class="bg-white opacity-95 absolute right-[calc(50%-600px)] z-50 w-[320px] h-auto pt-px pr-4 pb-4 pl-4 top-[15px] box-border rounded-[24px] shadow-[0_10px_25px_-5px_rgba(0,0,0,0.1),0_8px_10px_-6px_rgba(0,0,0,0.1)]">
+          <LoginBox compact />
+        </div>
+      </template>
+      <template v-else>
+        <div class="fucen_box">
+          <!-- Logged in: Show user info -->
           <div class="message_box">
             <div class="img">
               <router-link to="/user">
@@ -596,8 +509,8 @@ const closePopup = () => {
           <a :href="`http://wpa.qq.com/msgrd?v=3&uin=${sysConfig?.connet_qq || '228711'}&site=qq&menu=yes`" target="_blank" class="qq-banner">
             <img src="/index_qq.png" alt="QQ客服" width="335" height="75">
           </a>
-        </template>
-      </div>
+        </div>
+      </template>
     </div>
 
     <!-- Main Content -->
@@ -998,83 +911,6 @@ const closePopup = () => {
   top: 26px;
   z-index: 50;
   box-sizing: content-box;
-}
-
-.bannerbox .fucen_box form.sign_box {
-  width: 289px;
-  height: auto;
-  overflow: hidden;
-}
-
-.bannerbox .fucen_box form.sign_box > div {
-  margin: 0 auto;
-  width: 289px;
-  height: auto;
-  overflow: hidden;
-  font-size: 13px;
-}
-
-.bannerbox .fucen_box form.sign_box > div div.frame {
-  width: 100%;
-  height: auto;
-  padding: 7px 0;
-  border: 1px solid #eeeeef;
-  background: #fff;
-  overflow: hidden;
-  margin-bottom: 8px;
-  box-sizing: border-box;
-}
-
-.bannerbox .fucen_box form.sign_box > div div.frame b {
-  width: 16px;
-  height: 20px;
-  display: inline-block;
-  margin: auto 12px auto 17px;
-  float: left;
-}
-
-.bannerbox .fucen_box form.sign_box > div div.frame b.zh {
-  background: url("/index_ever.png") 0 0 no-repeat;
-}
-
-.bannerbox .fucen_box form.sign_box > div div.frame b.mm {
-  background: url("/index_ever.png") -25px 0 no-repeat;
-}
-
-.bannerbox .fucen_box form.sign_box > div div.frame input {
-  float: left;
-  border: 0px;
-  width: calc(100% - 50px);
-  height: 20px;
-  line-height: 20px;
-  outline: none;
-  color: #666;
-  font-size: 13px;
-}
-
-.bannerbox .fucen_box form.sign_box > div .sign {
-  width: 100%;
-  height: 45px;
-  line-height: 45px;
-  display: block;
-  background: #fa4c4b;
-  border: 0px;
-  font-size: 16px;
-  color: #fff;
-  text-align: center;
-  border-radius: 100px;
-  outline: none;
-  cursor: pointer;
-  box-sizing: border-box;
-}
-
-.bannerbox .fucen_box form.sign_box > div .sign:hover {
-  background: #f03736;
-}
-
-.bannerbox .fucen_box form.sign_box > div .sign:disabled {
-  background: #ccc;
-  cursor: not-allowed;
 }
 
 .error-msg {

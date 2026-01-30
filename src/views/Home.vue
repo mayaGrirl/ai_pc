@@ -477,7 +477,7 @@ const closePopup = () => {
       <!-- Login Box / User Info -->
       <!-- Not logged in: Show login form -->
       <template v-if="!isLogin">
-        <div class="bg-white opacity-95 absolute right-[calc(50%-600px)] z-102 w-[320px] h-auto pt-px pr-4 pb-4 pl-4 top-[15px] box-border rounded-[24px] shadow-[0_10px_25px_-5px_rgba(0,0,0,0.1),0_8px_10px_-6px_rgba(0,0,0,0.1)]">
+        <div class="bg-white opacity-95 absolute right-[calc(50%-600px)] z-[102] w-[320px] h-auto pt-px pr-4 pb-4 pl-4 top-[15px] box-border rounded-[24px] shadow-[0_10px_25px_-5px_rgba(0,0,0,0.1),0_8px_10px_-6px_rgba(0,0,0,0.1)]">
           <LoginBox compact />
         </div>
       </template>

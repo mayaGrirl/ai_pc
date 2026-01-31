@@ -8,11 +8,10 @@ import MainLayout from '@/components/layout/MainLayout.vue'
 import Skeleton from '@/components/Skeleton.vue'
 import { getBanners, getAnnouncements, indexGameHotNew, getHomePopup } from '@/api/home'
 import { withdrawalDynamics } from '@/api/customer'
-import { rankToday, rankYesterday } from '@/api/rank'
 import type { IndexDataItem, gameItem } from '@/types/index.type'
-import {TodayField} from '@/types/rank.type'
 import LoginBox from "@/components/auth/LoginBox.vue";
 import { LogOut, Wallet, ShoppingBag, CircleDollarSign, CalendarCheck, MessageSquare, ArrowRight } from 'lucide-vue-next'
+import HomeRank from "./components/homeRank.vue";
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -114,163 +113,6 @@ const stopWithdrawScroll = () => {
   isScrollPaused.value = true
 }
 
-// Rankings data
-interface RankingItem {
-  rank: number
-  user: string
-  amount: number
-}
-const todayRankings = ref<RankingItem[]>([])
-const yesterdayRankings = ref<RankingItem[]>([])
-const activeRankingTab = ref('today')
-const rankingPage = ref(1)
-const RANKING_PAGE_SIZE = 7
-const RANKING_TOTAL = 14
-
-// 当前显示的排行榜数据（分页后）
-const currentRankings = computed(() => {
-  const data = activeRankingTab.value === 'today' ? todayRankings.value : yesterdayRankings.value
-  const start = (rankingPage.value - 1) * RANKING_PAGE_SIZE
-  const end = start + RANKING_PAGE_SIZE
-  return data.slice(start, end)
-})
-
-// 总页数
-const totalRankingPages = computed(() => {
-  const data = activeRankingTab.value === 'today' ? todayRankings.value : yesterdayRankings.value
-  return Math.ceil(data.length / RANKING_PAGE_SIZE)
-})
-
-// 生成随机昵称（网络昵称风格）
-const generateRandomNickname = () => {
-  const nicknames = [
-    '大门', '小飞侠', '夜猫子', '追风少年', '逍遥客',
-    '独行侠', '神算子', '财神爷', '幸运星', '金手指',
-    '老司机', '淡定哥', '稳赢王', '发财树', '聚宝盆',
-    '福星高照', '一路发', '好运来', '招财猫', '摇钱树',
-    '常胜将军', '百战百胜', '一夜暴富', '步步高升', '财源滚滚',
-    '潇洒哥', '快乐王', '无敌手', '横扫千军', '所向披靡'
-  ]
-  const suffixes = [
-    '', '', '', // 有些不加后缀
-    String(Math.floor(Math.random() * 9000) + 1000), // 4位数字
-    String(Math.floor(Math.random() * 900) + 100), // 3位数字
-    '。', '~', '！'
-  ]
-  const nickname = nicknames[Math.floor(Math.random() * nicknames.length)]
-  const suffix = suffixes[Math.floor(Math.random() * suffixes.length)]
-  return nickname + suffix
-}
-
-// 生成随机金额
-const generateRandomRankAmount = () => {
-  return Math.floor(Math.random() * 200000000) + 50000000
-}
-
-// 生成假数据
-const generateFakeRankings = (count: number, startRank: number): RankingItem[] => {
-  const fakeData: RankingItem[] = []
-  for (let i = 0; i < count; i++) {
-    fakeData.push({
-      rank: startRank + i,
-      user: generateRandomNickname(),
-      amount: generateRandomRankAmount()
-    })
-  }
-  // 按金额降序排列
-  return fakeData.sort((a, b) => b.amount - a.amount)
-}
-
-// 转换API数据为显示格式
-const convertRankData = (data: TodayField[]): RankingItem[] => {
-  return data.map((item, index) => ({
-    rank: index + 1,
-    user: item.nickname || generateRandomNickname(),
-    amount: item.profit || 0
-  }))
-}
-
-// 获取排行榜数据
-const fetchRankings = async () => {
-  try {
-    const [todayRes, yesterdayRes] = await Promise.all([
-      rankToday(),
-      rankYesterday()
-    ])
-
-    // 处理今日排行榜
-    if (todayRes.code === 200 && todayRes.data) {
-      let todayData = convertRankData(todayRes.data)
-      // 不足14条则补充假数据
-      if (todayData.length < RANKING_TOTAL) {
-        const fakeCount = RANKING_TOTAL - todayData.length
-        const fakeData = generateFakeRankings(fakeCount, todayData.length + 1)
-        todayData = [...todayData, ...fakeData]
-      }
-      // 重新排序并设置排名
-      todayData.sort((a, b) => b.amount - a.amount)
-      todayData = todayData.slice(0, RANKING_TOTAL).map((item, index) => ({
-        ...item,
-        rank: index + 1
-      }))
-      todayRankings.value = todayData
-    } else {
-      // API失败时使用全部假数据
-      todayRankings.value = generateFakeRankings(RANKING_TOTAL, 1)
-        .map((item, index) => ({ ...item, rank: index + 1 }))
-    }
-
-    // 处理昨日排行榜
-    if (yesterdayRes.code === 200 && yesterdayRes.data) {
-      let yesterdayData = convertRankData(yesterdayRes.data)
-      // 不足14条则补充假数据
-      if (yesterdayData.length < RANKING_TOTAL) {
-        const fakeCount = RANKING_TOTAL - yesterdayData.length
-        const fakeData = generateFakeRankings(fakeCount, yesterdayData.length + 1)
-        yesterdayData = [...yesterdayData, ...fakeData]
-      }
-      // 重新排序并设置排名
-      yesterdayData.sort((a, b) => b.amount - a.amount)
-      yesterdayData = yesterdayData.slice(0, RANKING_TOTAL).map((item, index) => ({
-        ...item,
-        rank: index + 1
-      }))
-      yesterdayRankings.value = yesterdayData
-    } else {
-      // API失败时使用全部假数据
-      yesterdayRankings.value = generateFakeRankings(RANKING_TOTAL, 1)
-        .map((item, index) => ({ ...item, rank: index + 1 }))
-    }
-  } catch (error) {
-    console.error('获取排行榜数据失败:', error)
-    // 失败时使用假数据
-    todayRankings.value = generateFakeRankings(RANKING_TOTAL, 1)
-      .map((item, index) => ({ ...item, rank: index + 1 }))
-    yesterdayRankings.value = generateFakeRankings(RANKING_TOTAL, 1)
-      .map((item, index) => ({ ...item, rank: index + 1 }))
-  }
-}
-
-// 切换排行榜Tab
-const switchRankingTab = (tab: 'today' | 'yesterday') => {
-  activeRankingTab.value = tab
-  rankingPage.value = 1 // 切换Tab时重置页码
-}
-
-// 上一页
-const prevRankingPage = () => {
-  if (rankingPage.value > 1) {
-    rankingPage.value--
-  }
-}
-
-// 下一页
-const nextRankingPage = () => {
-  if (rankingPage.value < totalRankingPages.value) {
-    rankingPage.value++
-  }
-}
-
 // Shop tabs data
 const activeShopTab = ref(0)
 const shopTabs = ref([
@@ -364,9 +206,6 @@ onMounted(async () => {
   fetchWithdrawRecords().then(() => {
     startWithdrawScroll()
   })
-
-  // 获取排行榜数据
-  await fetchRankings();
 
   try {
     const [bannerRes, announcementRes, hotRes] = await Promise.all([
@@ -692,48 +531,7 @@ const closePopup = () => {
         </div>
 
         <!-- Daily Rankings -->
-        <div class="index_box day_box">
-          <ul class="menu">
-            <li :class="{ list: activeRankingTab === 'today' }" @click="switchRankingTab('today')">
-              <a href="javascript:void(0)">今日排行榜</a>
-            </li>
-            <li :class="{ list: activeRankingTab === 'yesterday' }" @click="switchRankingTab('yesterday')">
-              <a href="javascript:void(0)">昨日排行榜</a>
-            </li>
-          </ul>
-          <ul class="day_list">
-            <li class="top">
-              <div class="col-rank">排名</div>
-              <div class="col-name">昵称</div>
-              <div class="col-score">乐豆</div>
-            </li>
-            <li v-for="item in currentRankings" :key="`rank-${activeRankingTab}-${item.rank}`" class="rank-row">
-              <div class="col-rank">
-                <span
-                  :class="['rank-icon', item.rank === 1 ? 'one' : item.rank === 2 ? 'two' : item.rank === 3 ? 'three' : 'end']"
-                >{{ item.rank > 3 ? item.rank : '' }}</span>
-              </div>
-              <div class="col-name"><a href="javascript:void(0)">{{ item.user }}</a></div>
-              <div class="col-score">{{ $n(item.amount) }}</div>
-            </li>
-          </ul>
-          <!-- Pagination -->
-          <div class="ranking-pagination">
-            <a
-              href="javascript:void(0)"
-              class="page-btn prev"
-              :class="{ disabled: rankingPage === 1 }"
-              @click="prevRankingPage"
-            >上一页</a>
-            <span class="page-info">{{ rankingPage }}/{{ totalRankingPages }}</span>
-            <a
-              href="javascript:void(0)"
-              class="page-btn next"
-              :class="{ disabled: rankingPage === totalRankingPages }"
-              @click="nextRankingPage"
-            >下一页</a>
-          </div>
-        </div>
+        <HomeRank />
 
         <!-- Game Shop -->
         <div class="index_box prize_box">
@@ -802,7 +600,7 @@ const closePopup = () => {
       </div>
     </div>
 
-    </MainLayout>
+  </MainLayout>
 
   <!-- 首页弹框公告 -->
   <div v-if="showPopup && popupAnnouncement" class="home-popup-dialog">
@@ -1477,196 +1275,6 @@ const closePopup = () => {
   white-space: nowrap;
   text-align: right;
   color: #5f66c4;
-}
-
-/* Day Box - Rankings */
-.index_center .center_box .day_box {
-  width: 320px;
-  height: auto;
-  overflow: hidden;
-  margin-top: 20px;
-}
-
-.index_center .center_box .day_box ul.menu {
-  border-bottom: 1px solid #ececec;
-  width: 320px;
-  height: auto;
-  overflow: hidden;
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.index_center .center_box .day_box ul.menu li {
-  display: inline-block;
-  width: 160px;
-  height: 53px;
-  line-height: 53px;
-  text-align: center;
-  margin: 0 auto;
-  float: left;
-  font-size: 16px;
-  color: #4c4c4c;
-  cursor: pointer;
-  font-weight: bold;
-}
-
-.index_center .center_box .day_box ul.menu li.list {
-  border-bottom: 2px solid #f03736;
-  color: #f03736;
-}
-
-.index_center .center_box .day_box ul.menu li a {
-  color: inherit;
-  text-decoration: none;
-}
-
-.index_center .center_box .day_box ul.day_list {
-  width: 300px;
-  min-height: 349px;
-  overflow: hidden;
-  margin: 0 auto;
-  list-style: none;
-  padding: 0;
-}
-
-.index_center .center_box .day_box ul.day_list li {
-  width: 300px;
-  height: 50px;
-  line-height: 50px;
-  border-bottom: 1px solid #f0f0f0;
-  margin: 0 auto;
-  font-size: 13px;
-  display: flex;
-  align-items: center;
-}
-
-.index_center .center_box .day_box ul.day_list li.top {
-  background: #f9f9f9;
-  font-size: 13px;
-  color: #666;
-  height: 40px;
-  line-height: 40px;
-  border-bottom: 1px solid #eee;
-  display: flex;
-  align-items: center;
-  padding: 0;
-  width: 300px;
-}
-
-/* Ranking columns */
-.index_center .center_box .day_box ul.day_list li dd {
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  box-sizing: border-box;
-}
-
-.index_center .center_box .day_box ul.day_list li .col-rank {
-  width: 60px;
-  text-align: center;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.index_center .center_box .day_box ul.day_list li .col-name {
-  width: 100px;
-  text-align: left;
-  padding-left: 5px;
-}
-
-.index_center .center_box .day_box ul.day_list li .col-score {
-  flex: 1;
-  text-align: right;
-  padding-right: 10px;
-  color: #f03736;
-  font-weight: bold;
-}
-
-/* Rank icons */
-.index_center .center_box .day_box ul.day_list li .rank-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.index_center .center_box .day_box ul.day_list li .rank-icon.end {
-  width: 20px;
-  height: 20px;
-  color: #666;
-  text-align: center;
-  line-height: 20px;
-  background: #f0f0f0;
-  border-radius: 2px;
-  font-size: 12px;
-}
-
-.index_center .center_box .day_box ul.day_list li .rank-icon.one {
-  width: 24px;
-  height: 30px;
-  background: url("/yxsw_games_list.png") 0 0 no-repeat;
-  background-size: 72px 30px;
-}
-
-.index_center .center_box .day_box ul.day_list li .rank-icon.two {
-  width: 24px;
-  height: 30px;
-  background: url("/yxsw_games_list.png") -24px 0 no-repeat;
-  background-size: 72px 30px;
-}
-
-.index_center .center_box .day_box ul.day_list li .rank-icon.three {
-  width: 24px;
-  height: 30px;
-  background: url("/yxsw_games_list.png") -48px 0 no-repeat;
-  background-size: 72px 30px;
-}
-
-.index_center .center_box .day_box ul.day_list li a {
-  color: #333;
-}
-
-.index_center .center_box .day_box ul.day_list li a:hover {
-  color: #f03736;
-}
-
-/* Ranking Pagination */
-.index_center .center_box .day_box .ranking-pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 15px 0;
-  gap: 20px;
-  margin-top: 10px;
-}
-
-.index_center .center_box .day_box .ranking-pagination .page-btn {
-  color: #666;
-  font-size: 13px;
-  text-decoration: none;
-  padding: 8px 20px;
-  border: 1px solid #ddd;
-  background: #fff;
-  transition: all 0.3s;
-}
-
-.index_center .center_box .day_box .ranking-pagination .page-btn:hover:not(.disabled) {
-  color: #f03736;
-  border-color: #f03736;
-}
-
-.index_center .center_box .day_box .ranking-pagination .page-btn.disabled {
-  color: #ccc;
-  border-color: #eee;
-  background: #fafafa;
-  cursor: not-allowed;
-}
-
-.index_center .center_box .day_box .ranking-pagination .page-info {
-  color: #999;
-  font-size: 13px;
 }
 
 /* Prize Box - Shop */

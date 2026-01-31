@@ -64,6 +64,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '合作商' }
   },
   {
+    path: '/help',
+    name: 'Help',
+    component: () => import('@/views/Help.vue'),
+    meta: { title: '帮助中心' }
+  },
+  {
     path: '/usdt',
     name: 'USDT',
     component: () => import('@/views/USDT.vue'),

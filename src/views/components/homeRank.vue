@@ -67,7 +67,7 @@ onMounted(async () => {
         class="bg-[#f9f9f9] text-[13px] text-[#666] h-[40px] leading-[40px] border-b border-[#eee] flex items-center p-0 w-[300px]">
         <div class="w-[60px] text-center flex items-center justify-center">排名</div>
         <div class="w-[100px] text-left pl-[5px]">昵称</div>
-        <div class="flex-1 text-right pr-[10px] text-[#f03736] font-bold">乐豆</div>
+        <div class="flex-1 text-right pr-[10px] text-[#f03736] font-bold">金豆</div>
       </li>
       <div
         class="h-[480px] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-[#ccc] [&::-webkit-scrollbar-thumb]:rounded-[2px] [&::-webkit-scrollbar-track]:bg-transparent">

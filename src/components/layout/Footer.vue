@@ -39,10 +39,10 @@ onMounted(() => {
       <div class="channel_box">
         <dl class="bzzx">
           <dt>帮助中心</dt>
-          <dd><a href="#" target="_blank">鼎丰28是什么？</a></dd>
-          <dd><a href="#" target="_blank">如何注册帐号？</a></dd>
-          <dd><a href="#" target="_blank">生态值的用途？</a></dd>
-          <dd><a href="#" target="_blank">游戏积分的用途？</a></dd>
+          <dd><a href="/help#item84" target="_blank">鼎丰28是什么？</a></dd>
+          <dd><a href="/help#item85" target="_blank">金豆的用途？</a></dd>
+          <dd><a href="/help#item87" target="_blank">生态值的用途？</a></dd>
+          <dd><a href="/help#item88" target="_blank">游戏积分的用途？</a></dd>
         </dl>
         <dl class="yqlj">
           <dt>友情链接</dt>
@@ -165,7 +165,7 @@ onMounted(() => {
 }
 
 .footer_box .footer_centers .channel_box dl.bzzx {
-  width: 105px;
+  width: 125px;
 }
 
 .footer_box .footer_centers .channel_box dl.yqlj {
@@ -183,9 +183,8 @@ onMounted(() => {
   display: inline-block;
   float: left;
   text-align: left;
-  width: 105px;
+  width: 125px;
   margin: 0 auto;
-  height: 29px;
   line-height: 29px;
 }
 

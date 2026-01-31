@@ -329,7 +329,7 @@ const closePopup = () => {
 
             <div class="flex-1 min-w-0">
               <h3 class="text-base font-black text-gray-900 truncate leading-tight mb-0.5">
-                {{ customer?.nickname || '_sg' + customer?.id }}
+                {{ customer?.nickname || '' }}
               </h3>
               <div class="flex items-center gap-2">
                 <span class="text-[11px] font-bold text-gray-400 uppercase tracking-wider">ID: {{ customer?.id }}</span>
